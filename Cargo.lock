@@ -308,6 +308,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
+name = "paste"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -440,6 +446,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "xcb",
+ "xcb-wm",
 ]
 
 [[package]]
@@ -529,4 +536,15 @@ dependencies = [
  "bitflags",
  "libc",
  "quick-xml",
+]
+
+[[package]]
+name = "xcb-wm"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "151d80a83742235d439cfe429fa1cf9e0fb87c272d1efb1968d1996c5f28c76d"
+dependencies = [
+ "bitflags",
+ "paste",
+ "xcb",
 ]

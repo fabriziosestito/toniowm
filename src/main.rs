@@ -10,6 +10,7 @@ mod args;
 mod client;
 mod commands;
 mod config;
+mod ewmh;
 mod state;
 mod vector;
 mod window_manager;
@@ -37,6 +38,6 @@ fn start() -> Result<()> {
     });
 
     // Start the window manager
-    let mut wm = WindowManager::new(conn, client_receiver, screen_num as usize);
+    let mut wm = WindowManager::new(conn, screen_num, client_receiver);
     wm.run()
 }

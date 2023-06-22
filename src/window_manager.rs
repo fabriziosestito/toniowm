@@ -4,27 +4,30 @@ use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
 use crate::commands::Command;
+use crate::ewmh;
 use crate::state::State;
 use crate::vector::Vector2D;
 
 pub struct WindowManager {
     state: State,
     conn: Arc<xcb::Connection>,
+    atoms: ewmh::Atoms,
     client_receiver: channel::Receiver<Command>,
-    screen_num: usize,
+    screen_num: i32,
 }
 
 impl WindowManager {
     pub fn new(
         conn: xcb::Connection,
+        screen_num: i32,
         client_receiver: channel::Receiver<Command>,
-        screen_num: usize,
     ) -> WindowManager {
         let conn = Arc::new(conn);
-
+        let atoms = ewmh::Atoms::intern_all(&conn).unwrap();
         WindowManager {
             state: State::default(),
             conn,
+            atoms,
             client_receiver,
             screen_num,
         }
@@ -33,14 +36,36 @@ impl WindowManager {
     pub fn run(&mut self) -> Result<()> {
         let conn = Arc::clone(&self.conn);
         let setup = conn.get_setup();
-
         // TODO handle no screen?
-        let screen = setup.roots().nth(self.screen_num).unwrap();
-        self.state.root_window = screen.root();
+        let screen = setup.roots().nth(self.screen_num as usize).unwrap();
+        self.state.root = screen.root();
 
         if self.become_window_manager().is_err() {
             return Err(anyhow!("Another window manager is running."));
         }
+
+        ewmh::set_supported(&conn, &self.atoms, screen.root());
+
+        // Create a child window for EWMH compliance
+        // See: https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html
+        self.state.child = conn.generate_id();
+        self.conn.send_request(&x::CreateWindow {
+            depth: 0,
+            wid: self.state.child,
+            parent: self.state.root,
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1,
+            border_width: 0,
+            class: x::WindowClass::InputOnly,
+            visual: 0,
+            value_list: &[],
+        });
+
+        ewmh::set_wm_name(&conn, &self.atoms, self.state.child, "toniowm");
+        ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
+        ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
 
         // Spawn XCB event thread
         let (sender, receiver) = crossbeam::channel::unbounded();
@@ -98,7 +123,7 @@ impl WindowManager {
 
     fn become_window_manager(&self) -> Result<()> {
         let cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
-            window: self.state.root_window,
+            window: self.state.root,
             value_list: &[
                 x::Cw::EventMask(
                     x::EventMask::SUBSTRUCTURE_NOTIFY
@@ -155,7 +180,7 @@ impl WindowManager {
         // Reparent the window
         let reparent_cookie = self.conn.send_request_checked(&x::ReparentWindow {
             window: ev.window(),
-            parent: self.state.root_window,
+            parent: self.state.root,
             x: 0,
             y: 0,
         });
@@ -307,6 +332,7 @@ impl WindowManager {
             self.conn.check_request(unselected_window_cookie)?;
         }
         self.state.focus_client(window)?;
+        ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
 
         let selected_window_cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
             window,

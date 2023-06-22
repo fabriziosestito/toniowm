@@ -41,13 +41,15 @@ impl Client {
 
 pub struct State {
     /// The root window
-    pub root_window: x::Window,
+    pub root: x::Window,
+    /// The window manager window
+    pub child: x::Window,
     /// The list of clients managed by the window manager
     clients: IndexMap<x::Window, Client>,
     /// The currently focused window
-    focused_window: Option<x::Window>,
+    focused: Option<x::Window>,
     /// The last focused window
-    last_focused_window: Option<x::Window>,
+    last_focused: Option<x::Window>,
     /// The start position of the cursor when dragging a window.
     /// This is used to calculate the new position of the window.
     pub drag_start_pos: Vector2D,
@@ -59,10 +61,11 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            root_window: x::Window::none(),
+            root: x::Window::none(),
+            child: x::Window::none(),
             clients: IndexMap::new(),
-            focused_window: Default::default(),
-            last_focused_window: Default::default(),
+            focused: Default::default(),
+            last_focused: Default::default(),
             drag_start_pos: Default::default(),
             drag_start_frame_pos: Default::default(),
         }
@@ -144,8 +147,8 @@ impl State {
     /// Return an error if the client is not found.
     pub fn focus_client(&mut self, window: x::Window) -> Result<(), Error> {
         if self.clients.contains_key(&window) {
-            self.last_focused_window = self.focused_window;
-            self.focused_window = Some(window);
+            self.last_focused = self.focused;
+            self.focused = Some(window);
             Ok(())
         } else {
             Err(Error::ClientNotFound)
@@ -188,7 +191,7 @@ impl State {
     }
 
     pub fn focused_window(&self) -> Option<x::Window> {
-        self.focused_window
+        self.focused
     }
 }
 

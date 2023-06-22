@@ -102,7 +102,7 @@ impl WindowManager {
                         println!("Quitting");
                         break;
                     }
-                    Command::FocusClosest{ direction } => {
+                    Command::FocusClosest{ direction, selector: _} => {
                         // TODO add selector
                         // it could be focused window(default), or window by id
                         let window  = match self.state.focused_window() {

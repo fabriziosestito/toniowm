@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     match cli.command {
         Some(args::Commands::Start) => start(),
         Some(args::Commands::Client(command)) => {
-            client::dispatch_command(command);
+            client::dispatch_command(command.into());
             Ok(())
         }
         _ => Ok(()),

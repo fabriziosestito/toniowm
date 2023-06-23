@@ -1,6 +1,4 @@
-use clap::{Parser, Subcommand};
-
-use crate::commands::Command;
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(author, 
@@ -35,3 +33,31 @@ pub enum Commands {
     Client(Command),
 }
 
+
+#[derive(Subcommand)]
+pub enum Command {
+    Quit,
+    FocusClosest {
+        direction: Direction,
+        #[clap(flatten)]
+        selector: Selector,
+    },
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum Direction {
+    East,
+    West,
+    North,
+    South,
+}
+
+#[derive(clap::Args, Clone)]
+#[group(multiple = false)]
+pub struct Selector {
+    #[clap(long, short, default_value = "true")]
+    pub focused: bool,
+
+    #[clap(long, short)]
+    pub window: Option<u32>,
+}

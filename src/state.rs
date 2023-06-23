@@ -1,8 +1,11 @@
 use indexmap::IndexMap;
 use thiserror::Error;
-use xcb::{x, Xid};
+use xcb::{x, Xid, XidNew};
 
-use crate::{commands::Direction, vector::Vector2D};
+use crate::{
+    commands::{Direction, Selector},
+    vector::Vector2D,
+};
 
 const MIN_CLIENT_SIZE: Vector2D = Vector2D { x: 32, y: 32 };
 
@@ -136,6 +139,7 @@ impl State {
     pub fn teleport_client(&mut self, window: x::Window, pos: Vector2D) -> Result<Client, Error> {
         if let Some(client) = self.clients.get_mut(&window) {
             client.pos = pos;
+
             Ok(client.to_owned())
         } else {
             Err(Error::ClientNotFound)
@@ -146,52 +150,102 @@ impl State {
     ///
     /// Return an error if the client is not found.
     pub fn focus_client(&mut self, window: x::Window) -> Result<(), Error> {
+        if self.root == window {
+            self.set_focused(None);
+            return Ok(());
+        }
+
         if self.clients.contains_key(&window) {
-            self.last_focused = self.focused;
-            self.focused = Some(window);
+            self.set_focused(Some(window));
+
             Ok(())
         } else {
             Err(Error::ClientNotFound)
         }
     }
 
-    pub fn closest_client(&self, window: x::Window, direction: Direction) -> Option<Client> {
-        let client = self.clients.get(&window)?;
+    /// Focus the closest client in the given direction or none if there is no client.
+    ///
+    /// Accepts a Selector.
+    /// Return an error if no client can be selected.
+    pub fn focus_closest_client(
+        &mut self,
+        selector: Selector,
+        direction: Direction,
+    ) -> Result<Option<Client>, Error> {
+        let client = if let Some(client) = self.select_client(selector) {
+            client
+        } else {
+            return Err(Error::ClientNotFound);
+        };
 
         let mut distance: i32;
         let mut min_distance = std::i32::MAX;
         let mut closest_client = None;
 
-        for (_, c) in &self.clients {
+        for (_, c) in self.clients.clone() {
             if c.window == client.window {
                 continue; // Skip the focused window
             }
+            let dx = c.pos.x - client.pos.x;
+            let dy = c.pos.y - client.pos.y;
+            // Euclidean distance approximation
+            // We do not need to calculate the square root to compare distances
+            distance = dx.pow(2) + dy.pow(2);
+
             match direction {
                 Direction::East => {
-                    distance = client.pos.x - (c.pos.x + c.size.x);
+                    if c.pos.x > client.pos.x && distance < min_distance {
+                        min_distance = distance;
+                        closest_client = Some(c);
+                    }
                 }
                 Direction::West => {
-                    distance = c.pos.x - (client.pos.x + client.size.x);
+                    if c.pos.x < client.pos.x && distance < min_distance {
+                        min_distance = distance;
+                        closest_client = Some(c);
+                    }
                 }
                 Direction::North => {
-                    distance = client.pos.y - (client.pos.y + client.size.y);
+                    if c.pos.y < client.pos.y && distance < min_distance {
+                        min_distance = distance;
+                        closest_client = Some(c);
+                    }
                 }
                 Direction::South => {
-                    distance = client.pos.y - (c.pos.y + c.size.y);
+                    if c.pos.y > client.pos.y && distance < min_distance {
+                        min_distance = distance;
+                        closest_client = Some(c);
+                    }
                 }
-            }
-
-            if distance >= 0 && distance < min_distance {
-                min_distance = distance;
-                closest_client = Some(client.to_owned());
             }
         }
 
-        closest_client
+        match closest_client {
+            None => Ok(None),
+            Some(closest_client) => {
+                self.set_focused(Some(closest_client.window));
+                Ok(Some(closest_client.to_owned()))
+            }
+        }
     }
 
-    pub fn focused_window(&self) -> Option<x::Window> {
-        self.focused
+    fn select_client(&self, selector: Selector) -> Option<&Client> {
+        let window = match selector {
+            Selector::Focused => self.focused?,
+            Selector::Window(window) => unsafe { x::Window::new(window) },
+        };
+
+        self.clients.get(&window)
+    }
+
+    fn set_focused(&mut self, window: Option<x::Window>) {
+        self.last_focused = self.focused;
+        self.focused = window;
+    }
+
+    pub fn last_focused(&self) -> Option<x::Window> {
+        self.last_focused
     }
 }
 

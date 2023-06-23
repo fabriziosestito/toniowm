@@ -102,17 +102,18 @@ impl WindowManager {
                         println!("Quitting");
                         break;
                     }
-                    Command::FocusClosest{ direction, selector: _} => {
-                        // TODO add selector
-                        // it could be focused window(default), or window by id
-                        let window  = match self.state.focused_window() {
-                            Some(window) => window,
-                            None => continue,
-                        };
-
-                        if let Some(closest_client) = self.state.closest_client(window, direction) {
-                            self.focus_window(closest_client.window())?;
-                            println!("Focus closest left, window: {:?}", closest_client.window());
+                    Command::FocusClosest{ selector, direction} => {
+                        println!("Selector: {:?}", selector);
+                        match self.state.focus_closest_client(selector, direction) {
+                            Ok(client) => {
+                                if let Some(client) = client {
+                                    self.focus_window(client.window())?;
+                                };
+                                println!("Focus closest: {:?}", client);
+                            }
+                            Err(e) => {
+                                println!("Error: {:?}", e);
+                            }
                         }
                     }
                 }
@@ -121,6 +122,10 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Become the window manager.
+    /// This is done by changing the root window's event mask.
+    ///
+    /// If another window manager is already running, this will fail.
     fn become_window_manager(&self) -> Result<()> {
         let cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
             window: self.state.root,
@@ -267,6 +272,7 @@ impl WindowManager {
         self.state.drag_start_frame_pos = Vector2D::new(resp.x().into(), resp.y().into());
 
         if ev.detail() == x::ButtonIndex::N1 as u8 {
+            self.state.focus_client(ev.event())?;
             self.focus_window(ev.event())?;
         }
 
@@ -323,17 +329,17 @@ impl WindowManager {
     }
 
     fn focus_window(&mut self, window: x::Window) -> Result<()> {
-        if let Some(window) = self.state.focused_window() {
+        // Unfocus last focused window
+        if let Some(last_focused) = self.state.last_focused() {
             let unselected_window_cookie =
                 self.conn.send_request_checked(&x::ChangeWindowAttributes {
-                    window,
+                    window: last_focused,
                     value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR)],
                 });
             self.conn.check_request(unselected_window_cookie)?;
         }
-        self.state.focus_client(window)?;
-        ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
 
+        // Select and focus
         let selected_window_cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
             window,
             value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR_FOCUS)],
@@ -347,11 +353,15 @@ impl WindowManager {
         });
         self.conn.check_request(focus_cookie)?;
 
+        // Raise the window above the others
         let above_cookie = self.conn.send_request_checked(&x::ConfigureWindow {
             window,
             value_list: &[x::ConfigWindow::StackMode(x::StackMode::Above)],
         });
         self.conn.check_request(above_cookie)?;
+
+        // Set the EWMH hint
+        ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
 
         Ok(())
     }

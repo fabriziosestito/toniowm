@@ -23,7 +23,7 @@ pub enum Direction {
     South,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Selector {
     Focused,
     Window(u32),
@@ -60,14 +60,17 @@ impl From<args::Selector> for Selector {
         match selector {
             args::Selector {
                 focused: true,
-                window: _,
+                window: None,
             } => Self::Focused,
             args::Selector {
-                focused: _,
                 window: Some(window),
-            } => Self::Window(window),
+                ..
+            } => {
+                println!("window: {}", window);
+                Self::Window(window)
+            }
             // This is unreachable because the clap parser
-            // will always return either a focuseda window selector.
+            // will always return either a focused or a window.
             _ => unreachable!(),
         }
     }

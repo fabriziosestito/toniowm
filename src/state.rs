@@ -17,7 +17,7 @@ pub enum Error {
     ClientAlreadyExists,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 /// A client is everything we know by a window
 pub struct Client {
     /// The window id
@@ -306,5 +306,150 @@ mod tests {
         let result = state.remove_client(window);
 
         assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
+    fn test_drag_client() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        state.add_client(window, pos, size).unwrap();
+
+        let new_pos = Vector2D::new(10, 10);
+        let client = state.drag_client(window, new_pos).unwrap();
+
+        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(client.pos, new_pos);
+    }
+
+    #[test]
+    fn test_drag_client_not_found() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+
+        let result = state.drag_client(window, Vector2D::new(10, 10));
+
+        assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
+    fn test_drag_resize_client() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        state.add_client(window, pos, size).unwrap();
+
+        let new_size = Vector2D::new(50, 50);
+        let client = state.drag_resize_client(window, new_size).unwrap();
+
+        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(client.size, new_size);
+    }
+
+    #[test]
+    fn test_drag_resize_client_min_value() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        state.add_client(window, pos, size).unwrap();
+
+        let client = state
+            .drag_resize_client(window, Vector2D::new(0, 0))
+            .unwrap();
+
+        assert_eq!(client.size(), MIN_CLIENT_SIZE);
+    }
+
+    #[test]
+    fn test_drag_resize_client_not_found() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+
+        let result = state.drag_resize_client(window, Vector2D::new(50, 50));
+
+        assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
+    fn test_teleport_client() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        state.add_client(window, pos, size).unwrap();
+
+        let new_pos = Vector2D::new(10, 10);
+        let client = state.teleport_client(window, new_pos).unwrap();
+
+        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(client.pos, new_pos);
+    }
+
+    #[test]
+    fn test_teleport_client_not_found() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+
+        let result = state.teleport_client(window, Vector2D::new(10, 10));
+
+        assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
+    fn test_focus_client() {
+        let mut state = State {
+            root: unsafe { x::Window::new(0) },
+            ..Default::default()
+        };
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        state.add_client(window, pos, size).unwrap();
+
+        let result = state.focus_client(window);
+
+        assert_matches!(result, Ok(()));
+        assert_eq!(state.focused, Some(window));
+
+        state.focus_client(state.root).unwrap();
+        assert_eq!(state.focused, None);
+        assert_eq!(state.last_focused, Some(window));
+    }
+
+    #[test]
+    fn test_focus_client_not_found() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+
+        let result = state.focus_client(window);
+
+        assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
+    fn test_set_focused() {
+        let old_focused = unsafe { x::Window::new(123) };
+        let mut state = State {
+            focused: Some(old_focused),
+            ..Default::default()
+        };
+
+        let new_focused = unsafe { x::Window::new(456) };
+        state.set_focused(Some(new_focused));
+
+        assert_eq!(state.focused, Some(new_focused));
+        assert_eq!(state.last_focused, Some(old_focused));
+
+        state.set_focused(None);
+        assert_eq!(state.focused, None);
+        assert_eq!(state.last_focused, Some(new_focused));
     }
 }

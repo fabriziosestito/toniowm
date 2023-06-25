@@ -435,6 +435,85 @@ mod tests {
     }
 
     #[test]
+    fn test_focus_closest_client() {
+        let mut state = State::default();
+        let window_ne_xid = 1;
+        let window_nw_xid = 2;
+        let window_se_xid = 3;
+        let window_sw_xid = 4;
+
+        let client_ne = state
+            .add_client(
+                unsafe { x::Window::new(window_ne_xid) },
+                Vector2D::new(0, 0),
+                Vector2D::new(100, 100),
+            )
+            .unwrap();
+
+        let client_nw = state
+            .add_client(
+                unsafe { x::Window::new(window_nw_xid) },
+                Vector2D::new(150, 0),
+                Vector2D::new(100, 100),
+            )
+            .unwrap();
+
+        let client_se = state
+            .add_client(
+                unsafe { x::Window::new(window_se_xid) },
+                Vector2D::new(0, 150),
+                Vector2D::new(100, 100),
+            )
+            .unwrap();
+
+        let client_sw = state
+            .add_client(
+                unsafe { x::Window::new(window_sw_xid) },
+                Vector2D::new(150, 150),
+                Vector2D::new(100, 100),
+            )
+            .unwrap();
+
+        let client = state
+            .focus_closest_client(Selector::Window(1), Direction::East)
+            .unwrap();
+
+        assert_eq!(Some(client_nw), client);
+        assert_eq!(state.focused, Some(client_nw.window));
+
+        let client = state
+            .focus_closest_client(Selector::Focused, Direction::South)
+            .unwrap();
+
+        assert_eq!(Some(client_sw), client);
+        assert_eq!(state.focused, Some(client_sw.window));
+
+        let client = state
+            .focus_closest_client(Selector::Window(window_sw_xid), Direction::West)
+            .unwrap();
+
+        assert_eq!(Some(client_se), client);
+        assert_eq!(state.focused, Some(client_se.window));
+
+        let client = state
+            .focus_closest_client(Selector::Focused, Direction::North)
+            .unwrap();
+
+        assert_eq!(Some(client_ne), client);
+        assert_eq!(state.focused, Some(client_ne.window));
+    }
+
+    #[test]
+    fn test_focus_closest_client_not_found() {
+        let xid = 123;
+        let mut state = State::default();
+
+        let result = state.focus_closest_client(Selector::Window(xid), Direction::East);
+
+        assert_matches!(result, Err(Error::ClientNotFound));
+    }
+
+    #[test]
     fn test_set_focused() {
         let old_focused = unsafe { x::Window::new(123) };
         let mut state = State {

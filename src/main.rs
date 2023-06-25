@@ -1,5 +1,3 @@
-#![feature(assert_matches)]
-
 use anyhow::Result;
 use clap::Parser;
 use crossbeam::channel;

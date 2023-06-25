@@ -252,7 +252,6 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::assert_matches::assert_matches;
     use xcb::XidNew;
 
     #[test]
@@ -280,7 +279,7 @@ mod tests {
 
         let result = state.add_client(window, pos, size);
 
-        assert_matches!(result, Err(Error::ClientAlreadyExists));
+        assert!(matches!(result, Err(Error::ClientAlreadyExists)));
     }
 
     #[test]
@@ -294,7 +293,7 @@ mod tests {
 
         let result = state.remove_client(window);
 
-        assert_matches!(result, Ok(()));
+        assert!(matches!(result, Ok(())));
         assert_eq!(state.clients.len(), 0);
     }
 
@@ -305,7 +304,7 @@ mod tests {
 
         let result = state.remove_client(window);
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]
@@ -331,7 +330,7 @@ mod tests {
 
         let result = state.drag_client(window, Vector2D::new(10, 10));
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]
@@ -373,7 +372,7 @@ mod tests {
 
         let result = state.drag_resize_client(window, Vector2D::new(50, 50));
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]
@@ -399,7 +398,7 @@ mod tests {
 
         let result = state.teleport_client(window, Vector2D::new(10, 10));
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]
@@ -416,7 +415,7 @@ mod tests {
 
         let result = state.focus_client(window);
 
-        assert_matches!(result, Ok(()));
+        assert!(matches!(result, Ok(())));
         assert_eq!(state.focused, Some(window));
 
         state.focus_client(state.root).unwrap();
@@ -431,7 +430,7 @@ mod tests {
 
         let result = state.focus_client(window);
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]
@@ -510,7 +509,7 @@ mod tests {
 
         let result = state.focus_closest_client(Selector::Window(xid), Direction::East);
 
-        assert_matches!(result, Err(Error::ClientNotFound));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 
     #[test]

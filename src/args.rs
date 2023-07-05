@@ -42,6 +42,10 @@ pub enum Command {
         #[clap(flatten)]
         selector: Selector,
     },
+    Close {
+        #[clap(flatten)]
+        selector: Selector,
+    },
 }
 
 #[derive(ValueEnum, Clone)]

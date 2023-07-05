@@ -94,12 +94,23 @@ impl State {
 
     /// Remove a client from the state.
     ///
+    /// Return the remove client.
     /// Return an error if the client is not found.
-    pub fn remove_client(&mut self, window: x::Window) -> Result<(), Error> {
-        if self.clients.shift_remove(&window).is_none() {
+    pub fn remove_client(&mut self, selector: Selector) -> Result<Client, Error> {
+        let client = if let Some(client) = self.select_client(selector) {
+            client
+        } else {
+            return Err(Error::ClientNotFound);
+        };
+
+        if let Selector::Focused = selector {
+            self.focused = None;
+        }
+
+        if self.clients.shift_remove(&client.window).is_none() {
             Err(Error::ClientNotFound)
         } else {
-            Ok(())
+            Ok(client)
         }
     }
 
@@ -230,13 +241,13 @@ impl State {
         }
     }
 
-    fn select_client(&self, selector: Selector) -> Option<&Client> {
+    fn select_client(&self, selector: Selector) -> Option<Client> {
         let window = match selector {
             Selector::Focused => self.focused?,
             Selector::Window(window) => unsafe { x::Window::new(window) },
         };
 
-        self.clients.get(&window)
+        self.clients.get(&window).cloned()
     }
 
     fn set_focused(&mut self, window: Option<x::Window>) {
@@ -285,24 +296,32 @@ mod tests {
     #[test]
     fn test_remove_client() {
         let mut state = State::default();
-        let window = unsafe { x::Window::new(123) };
+        let xid = 123;
+        let window = unsafe { x::Window::new(xid) };
         let pos = Vector2D::new(0, 0);
         let size = Vector2D::new(100, 100);
 
-        state.add_client(window, pos, size).unwrap();
+        let client = state.add_client(window, pos, size).unwrap();
+        let result = state.remove_client(Selector::Window(xid));
 
-        let result = state.remove_client(window);
-
-        assert!(matches!(result, Ok(())));
+        assert!(matches!(result, Ok(removed_client) if client == removed_client));
         assert_eq!(state.clients.len(), 0);
+
+        let client = state.add_client(window, pos, size).unwrap();
+        state.focus_client(window).unwrap();
+
+        let result = state.remove_client(Selector::Focused);
+
+        assert!(matches!(result, Ok(removed_client) if client == removed_client));
+        assert_eq!(state.clients.len(), 0);
+        assert_eq!(state.focused, None);
     }
 
     #[test]
     fn test_remove_client_not_found() {
         let mut state = State::default();
-        let window = unsafe { x::Window::new(123) };
 
-        let result = state.remove_client(window);
+        let result = state.remove_client(Selector::Window(123));
 
         assert!(matches!(result, Err(Error::ClientNotFound)));
     }

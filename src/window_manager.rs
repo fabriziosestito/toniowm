@@ -114,6 +114,16 @@ impl WindowManager {
                             }
                         }
                     }
+                    Command::Close{ selector } => {
+                        match self.state.remove_client(selector) {
+                            Ok(client) => {
+                                self.destroy_window(client.window())?;
+                            }
+                            Err(e) => {
+                                println!("Error: {:?}", e);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -360,6 +370,13 @@ impl WindowManager {
 
         // Set the EWMH hint
         ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
+
+        Ok(())
+    }
+
+    fn destroy_window(&self, window: x::Window) -> Result<()> {
+        let cookie = self.conn.send_request_checked(&x::DestroyWindow { window });
+        self.conn.check_request(cookie)?;
 
         Ok(())
     }

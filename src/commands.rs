@@ -13,6 +13,9 @@ pub enum Command {
         direction: Direction,
         selector: Selector,
     },
+    Close {
+        selector: Selector,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -23,7 +26,7 @@ pub enum Direction {
     South,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Selector {
     Focused,
     Window(u32),
@@ -38,6 +41,9 @@ impl From<args::Command> for Command {
                 selector,
             } => Self::FocusClosest {
                 direction: direction.into(),
+                selector: selector.into(),
+            },
+            args::Command::Close { selector } => Self::Close {
                 selector: selector.into(),
             },
         }

@@ -1,16 +1,9 @@
-//! Functions and types to interact with the EWMH specification.
+//! Functions to interact with the EWMH specification.
 
-use xcb::{atoms_struct, x};
+use xcb::x;
 
-atoms_struct! {
-    pub struct Atoms {
-        /// Supported EWMH hints
-        pub net_supported  => b"_NET_SUPPORTED" only_if_exists = false,
-        pub net_active_window  => b"_NET_ACTIVE_WINDOW" only_if_exists = false,
-        pub net_supporting_wm_check  => b"_NET_SUPPORTING_WM_CHECK" only_if_exists = false,
-        pub net_wm_name  => b"_NET_WM_NAME" only_if_exists = false,
-    }
-}
+use crate::atoms::Atoms;
+
 // Set the _NET_SUPPORTED property on the root window.
 // This is needed to indicate which hints are supported by the window manager.
 pub fn set_supported(conn: &xcb::Connection, atoms: &Atoms, root: x::Window) {

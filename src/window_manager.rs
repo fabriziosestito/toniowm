@@ -3,15 +3,16 @@ use crossbeam::channel;
 use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
+use crate::atoms::Atoms;
 use crate::commands::Command;
-use crate::ewmh;
 use crate::state::State;
 use crate::vector::Vector2D;
+use crate::{ewmh, icccm};
 
 pub struct WindowManager {
     state: State,
     conn: Arc<xcb::Connection>,
-    atoms: ewmh::Atoms,
+    atoms: Atoms,
     client_receiver: channel::Receiver<Command>,
     screen_num: i32,
 }
@@ -23,7 +24,7 @@ impl WindowManager {
         client_receiver: channel::Receiver<Command>,
     ) -> WindowManager {
         let conn = Arc::new(conn);
-        let atoms = ewmh::Atoms::intern_all(&conn).unwrap();
+        let atoms = Atoms::intern_all(&conn).unwrap();
         WindowManager {
             state: State::default(),
             conn,
@@ -93,8 +94,8 @@ impl WindowManager {
                     x::Event::MapRequest(ev) => {
                         self.handle_map_request_event(ev)?;
                     }
-                   _ev => {
-                        // TODO: logging
+                    ev => {
+                        println!("Unhandled event: {:?}", ev);
                     }
                 },
                 recv(self.client_receiver) -> message => match message.unwrap() {
@@ -117,7 +118,7 @@ impl WindowManager {
                     Command::Close{ selector } => {
                         match self.state.remove_client(selector) {
                             Ok(client) => {
-                                self.destroy_window(client.window())?;
+                                self.delete_window(client.window())?;
                             }
                             Err(e) => {
                                 println!("Error: {:?}", e);
@@ -374,9 +375,18 @@ impl WindowManager {
         Ok(())
     }
 
-    fn destroy_window(&self, window: x::Window) -> Result<()> {
-        let cookie = self.conn.send_request_checked(&x::DestroyWindow { window });
-        self.conn.check_request(cookie)?;
+    fn delete_window(&self, window: x::Window) -> Result<()> {
+        // Check if the window supports the delete protocol
+        // If it doesnt, just kill it
+        let wm_protocols = icccm::get_wm_protocols(&self.conn, &self.atoms, window)?;
+        if wm_protocols.contains(&self.atoms.wm_delete_window) {
+            icccm::send_wm_delete_window(&self.conn, &self.atoms, window)?;
+        } else {
+            let cookie = self.conn.send_request_checked(&x::KillClient {
+                resource: window.resource_id(),
+            });
+            self.conn.check_request(cookie)?;
+        }
 
         Ok(())
     }

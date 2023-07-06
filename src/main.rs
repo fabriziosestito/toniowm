@@ -5,10 +5,12 @@ use std::thread;
 use window_manager::WindowManager;
 
 mod args;
+mod atoms;
 mod client;
 mod commands;
 mod config;
 mod ewmh;
+mod icccm;
 mod state;
 mod vector;
 mod window_manager;

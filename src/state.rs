@@ -94,23 +94,15 @@ impl State {
 
     /// Remove a client from the state.
     ///
-    /// Return the remove client.
     /// Return an error if the client is not found.
-    pub fn remove_client(&mut self, selector: Selector) -> Result<Client, Error> {
-        let client = if let Some(client) = self.select_client(selector) {
-            client
-        } else {
-            return Err(Error::ClientNotFound);
-        };
-
-        if let Selector::Focused = selector {
-            self.focused = None;
-        }
-
-        if self.clients.shift_remove(&client.window).is_none() {
+    pub fn remove_client(&mut self, window: x::Window) -> Result<(), Error> {
+        if self.clients.shift_remove(&window).is_none() {
             Err(Error::ClientNotFound)
         } else {
-            Ok(client)
+            if self.focused == Some(window) {
+                self.focused = None;
+            }
+            Ok(())
         }
     }
 
@@ -184,11 +176,7 @@ impl State {
         selector: Selector,
         direction: Direction,
     ) -> Result<Option<Client>, Error> {
-        let client = if let Some(client) = self.select_client(selector) {
-            client
-        } else {
-            return Err(Error::ClientNotFound);
-        };
+        let client = self.select_client(selector)?;
 
         let mut distance: i32;
         let mut min_distance = std::i32::MAX;
@@ -241,13 +229,22 @@ impl State {
         }
     }
 
-    fn select_client(&self, selector: Selector) -> Option<Client> {
+    pub fn select_client(&self, selector: Selector) -> Result<Client, Error> {
         let window = match selector {
-            Selector::Focused => self.focused?,
+            Selector::Focused => {
+                if let Some(window) = self.focused {
+                    window
+                } else {
+                    return Err(Error::ClientNotFound);
+                }
+            }
             Selector::Window(window) => unsafe { x::Window::new(window) },
         };
 
-        self.clients.get(&window).cloned()
+        match self.clients.get(&window).cloned() {
+            Some(client) => Ok(client),
+            None => Err(Error::ClientNotFound),
+        }
     }
 
     fn set_focused(&mut self, window: Option<x::Window>) {
@@ -296,23 +293,16 @@ mod tests {
     #[test]
     fn test_remove_client() {
         let mut state = State::default();
-        let xid = 123;
-        let window = unsafe { x::Window::new(xid) };
+        let window = unsafe { x::Window::new(123) };
         let pos = Vector2D::new(0, 0);
         let size = Vector2D::new(100, 100);
 
-        let client = state.add_client(window, pos, size).unwrap();
-        let result = state.remove_client(Selector::Window(xid));
-
-        assert!(matches!(result, Ok(removed_client) if client == removed_client));
-        assert_eq!(state.clients.len(), 0);
-
-        let client = state.add_client(window, pos, size).unwrap();
+        state.add_client(window, pos, size).unwrap();
         state.focus_client(window).unwrap();
 
-        let result = state.remove_client(Selector::Focused);
+        let result = state.remove_client(window);
 
-        assert!(matches!(result, Ok(removed_client) if client == removed_client));
+        assert!(matches!(result, Ok(())));
         assert_eq!(state.clients.len(), 0);
         assert_eq!(state.focused, None);
     }
@@ -320,8 +310,9 @@ mod tests {
     #[test]
     fn test_remove_client_not_found() {
         let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
 
-        let result = state.remove_client(Selector::Window(123));
+        let result = state.remove_client(window);
 
         assert!(matches!(result, Err(Error::ClientNotFound)));
     }
@@ -455,45 +446,29 @@ mod tests {
     #[test]
     fn test_focus_closest_client() {
         let mut state = State::default();
-        let window_ne_xid = 1;
-        let window_nw_xid = 2;
-        let window_se_xid = 3;
-        let window_sw_xid = 4;
+        let window_ne = unsafe { x::Window::new(1) };
+        let window_nw = unsafe { x::Window::new(2) };
+        let window_se = unsafe { x::Window::new(3) };
+        let window_sw = unsafe { x::Window::new(4) };
 
         let client_ne = state
-            .add_client(
-                unsafe { x::Window::new(window_ne_xid) },
-                Vector2D::new(0, 0),
-                Vector2D::new(100, 100),
-            )
+            .add_client(window_ne, Vector2D::new(0, 0), Vector2D::new(100, 100))
             .unwrap();
 
         let client_nw = state
-            .add_client(
-                unsafe { x::Window::new(window_nw_xid) },
-                Vector2D::new(150, 0),
-                Vector2D::new(100, 100),
-            )
+            .add_client(window_nw, Vector2D::new(150, 0), Vector2D::new(100, 100))
             .unwrap();
 
         let client_se = state
-            .add_client(
-                unsafe { x::Window::new(window_se_xid) },
-                Vector2D::new(0, 150),
-                Vector2D::new(100, 100),
-            )
+            .add_client(window_se, Vector2D::new(0, 150), Vector2D::new(100, 100))
             .unwrap();
 
         let client_sw = state
-            .add_client(
-                unsafe { x::Window::new(window_sw_xid) },
-                Vector2D::new(150, 150),
-                Vector2D::new(100, 100),
-            )
+            .add_client(window_sw, Vector2D::new(150, 150), Vector2D::new(100, 100))
             .unwrap();
 
         let client = state
-            .focus_closest_client(Selector::Window(1), Direction::East)
+            .focus_closest_client(Selector::Window(window_ne.resource_id()), Direction::East)
             .unwrap();
 
         assert_eq!(Some(client_nw), client);
@@ -507,7 +482,7 @@ mod tests {
         assert_eq!(state.focused, Some(client_sw.window));
 
         let client = state
-            .focus_closest_client(Selector::Window(window_sw_xid), Direction::West)
+            .focus_closest_client(Selector::Window(window_sw.resource_id()), Direction::West)
             .unwrap();
 
         assert_eq!(Some(client_se), client);
@@ -523,10 +498,11 @@ mod tests {
 
     #[test]
     fn test_focus_closest_client_not_found() {
-        let xid = 123;
+        let window = unsafe { x::Window::new(123) };
         let mut state = State::default();
 
-        let result = state.focus_closest_client(Selector::Window(xid), Direction::East);
+        let result =
+            state.focus_closest_client(Selector::Window(window.resource_id()), Direction::East);
 
         assert!(matches!(result, Err(Error::ClientNotFound)));
     }
@@ -548,5 +524,37 @@ mod tests {
         state.set_focused(None);
         assert_eq!(state.focused, None);
         assert_eq!(state.last_focused, Some(new_focused));
+    }
+
+    #[test]
+    fn test_select_client() {
+        let mut state = State::default();
+        let window = unsafe { x::Window::new(123) };
+        let pos = Vector2D::new(0, 0);
+        let size = Vector2D::new(100, 100);
+
+        let expected_client = state.add_client(window, pos, size).unwrap();
+
+        let client = state
+            .select_client(Selector::Window(window.resource_id()))
+            .unwrap();
+        assert_eq!(client, expected_client);
+
+        state.focus_client(window).unwrap();
+
+        let client = state.select_client(Selector::Focused).unwrap();
+        assert_eq!(client, expected_client);
+    }
+
+    #[test]
+    fn test_select_client_not_found() {
+        let state = State::default();
+        let window = unsafe { x::Window::new(123) };
+
+        let result = state.select_client(Selector::Window(window.resource_id()));
+        assert!(matches!(result, Err(Error::ClientNotFound)));
+
+        let result = state.select_client(Selector::Focused);
+        assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 }

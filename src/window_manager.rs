@@ -93,6 +93,9 @@ impl WindowManager {
                     }
                     x::Event::MapRequest(ev) => {
                         self.handle_map_request_event(ev)?;
+                    },
+                    x::Event::DestroyNotify(ev) => {
+                        self.handle_destroy_notify_event(ev);
                     }
                     ev => {
                         println!("Unhandled event: {:?}", ev);
@@ -116,12 +119,13 @@ impl WindowManager {
                         }
                     }
                     Command::Close{ selector } => {
-                        match self.state.remove_client(selector) {
+                        match self.state.select_client(selector) {
                             Ok(client) => {
                                 self.delete_window(client.window())?;
                             }
-                            Err(e) => {
-                                println!("Error: {:?}", e);
+                            // TODO: return error in result channel
+                            _ => {
+                                println!("Client not found");
                             }
                         }
                     }
@@ -335,6 +339,12 @@ impl WindowManager {
         self.conn.check_request(cookie)?;
 
         Ok(())
+    }
+
+    fn handle_destroy_notify_event(&mut self, ev: x::DestroyNotifyEvent) {
+        if let Err(err) = self.state.remove_client(ev.window()) {
+            println!("Failed to remove client: {}", err);
+        }
     }
 
     fn focus_window(&mut self, window: x::Window) -> Result<()> {

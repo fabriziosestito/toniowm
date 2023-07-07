@@ -350,37 +350,34 @@ impl WindowManager {
     fn focus_window(&mut self, window: x::Window) -> Result<()> {
         // Unfocus last focused window
         if let Some(last_focused) = self.state.last_focused() {
-            let unselected_window_cookie =
-                self.conn.send_request_checked(&x::ChangeWindowAttributes {
-                    window: last_focused,
-                    value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR)],
-                });
-            self.conn.check_request(unselected_window_cookie)?;
+            self.conn.send_request_checked(&x::ChangeWindowAttributes {
+                window: last_focused,
+                value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR)],
+            });
         }
 
         // Select and focus
-        let selected_window_cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
+        self.conn.send_request(&x::ChangeWindowAttributes {
             window,
             value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR_FOCUS)],
         });
-        self.conn.check_request(selected_window_cookie)?;
 
-        let focus_cookie = self.conn.send_request_checked(&x::SetInputFocus {
+        self.conn.send_request(&x::SetInputFocus {
             revert_to: x::InputFocus::PointerRoot,
             focus: window,
             time: x::CURRENT_TIME,
         });
-        self.conn.check_request(focus_cookie)?;
 
         // Raise the window above the others
-        let above_cookie = self.conn.send_request_checked(&x::ConfigureWindow {
+        self.conn.send_request(&x::ConfigureWindow {
             window,
             value_list: &[x::ConfigWindow::StackMode(x::StackMode::Above)],
         });
-        self.conn.check_request(above_cookie)?;
 
         // Set the EWMH hint
         ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
+
+        self.conn.flush()?;
 
         Ok(())
     }

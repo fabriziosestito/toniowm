@@ -68,10 +68,13 @@ impl WindowManager {
         ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
 
+        conn.flush()?;
+
         // Spawn XCB event thread
         let (sender, receiver) = crossbeam::channel::unbounded();
         let conn = Arc::clone(&self.conn);
         thread::spawn(move || loop {
+            // TODO: handle error, maybe just log?
             let event = conn.wait_for_event().unwrap();
             match event {
                 xcb::Event::X(event) => sender.send(event).unwrap(),
@@ -89,7 +92,7 @@ impl WindowManager {
                         self.handle_motion_notify_event(ev)?;
                     }
                     x::Event::ConfigureRequest(ev) => {
-                        self.handle_configure_request_event(ev)?;
+                        self.handle_configure_request_event(ev);
                     }
                     x::Event::MapRequest(ev) => {
                         self.handle_map_request_event(ev)?;
@@ -131,6 +134,8 @@ impl WindowManager {
                     }
                 }
             }
+
+            self.conn.flush()?;
         }
         Ok(())
     }
@@ -140,20 +145,19 @@ impl WindowManager {
     ///
     /// If another window manager is already running, this will fail.
     fn become_window_manager(&self) -> Result<()> {
-        let cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
-            window: self.state.root,
-            value_list: &[
-                x::Cw::EventMask(
-                    x::EventMask::SUBSTRUCTURE_NOTIFY
-                        | x::EventMask::SUBSTRUCTURE_REDIRECT
-                        | x::EventMask::BUTTON_PRESS
-                        | x::EventMask::BUTTON_RELEASE,
-                ),
-                x::Cw::Cursor(Xid::none()),
-            ],
-        });
-
-        self.conn.check_request(cookie)?;
+        self.conn
+            .send_and_check_request(&x::ChangeWindowAttributes {
+                window: self.state.root,
+                value_list: &[
+                    x::Cw::EventMask(
+                        x::EventMask::SUBSTRUCTURE_NOTIFY
+                            | x::EventMask::SUBSTRUCTURE_REDIRECT
+                            | x::EventMask::BUTTON_PRESS
+                            | x::EventMask::BUTTON_RELEASE,
+                    ),
+                    x::Cw::Cursor(Xid::none()),
+                ],
+            })?;
 
         Ok(())
     }
@@ -171,14 +175,13 @@ impl WindowManager {
         self.state.add_client(ev.window(), pos, size)?;
 
         // Set border width
-        let border_cookie = self.conn.send_request_checked(&x::ConfigureWindow {
+        self.conn.send_request(&x::ConfigureWindow {
             window: ev.window(),
             value_list: &[x::ConfigWindow::BorderWidth(10)],
         });
-        self.conn.check_request(border_cookie)?;
 
         // Set border color
-        let attr_cookie = self.conn.send_request_checked(&x::ChangeWindowAttributes {
+        self.conn.send_request(&x::ChangeWindowAttributes {
             window: ev.window(),
             value_list: &[
                 x::Cw::BorderPixel(123),
@@ -187,39 +190,34 @@ impl WindowManager {
                 ),
             ],
         });
-        self.conn.check_request(attr_cookie)?;
 
-        let save_set_cookie = self.conn.send_request_checked(&x::ChangeSaveSet {
+        self.conn.send_request(&x::ChangeSaveSet {
             mode: x::SetMode::Insert,
             window: ev.window(),
         });
-        self.conn.check_request(save_set_cookie)?;
 
         // Reparent the window
-        let reparent_cookie = self.conn.send_request_checked(&x::ReparentWindow {
+        self.conn.send_request(&x::ReparentWindow {
             window: ev.window(),
             parent: self.state.root,
             x: 0,
             y: 0,
         });
-        self.conn.check_request(reparent_cookie)?;
 
         // Manage the window
-        let map_cookie = self.conn.send_request_checked(&x::MapWindow {
+        self.conn.send_request(&x::MapWindow {
             window: ev.window(),
         });
-        self.conn.check_request(map_cookie)?;
 
         // Focus the window
-        let focus_cookie = self.conn.send_request_checked(&x::SetInputFocus {
+        self.conn.send_request(&x::SetInputFocus {
             revert_to: x::InputFocus::PointerRoot,
             focus: ev.window(),
             time: x::CURRENT_TIME,
         });
-        self.conn.check_request(focus_cookie)?;
 
         // Add button grab settings
-        let button_cookie = self.conn.send_request_checked(&x::GrabButton {
+        self.conn.send_request(&x::GrabButton {
             owner_events: true,
             grab_window: ev.window(),
             event_mask: x::EventMask::BUTTON_PRESS | x::EventMask::BUTTON_RELEASE,
@@ -230,17 +228,15 @@ impl WindowManager {
             button: crate::config::SELECT_BUTTON,
             modifiers: crate::config::MOD_KEY,
         });
-        self.conn.check_request(button_cookie)?;
 
         // Allow events
-        let allow_events_cookie = self.conn.send_request_checked(&x::AllowEvents {
+        self.conn.send_request(&x::AllowEvents {
             mode: x::Allow::AsyncPointer,
             time: x::CURRENT_TIME,
         });
-        self.conn.check_request(allow_events_cookie)?;
 
         // Drag settings
-        let drag_cookie = self.conn.send_request_checked(&x::GrabButton {
+        self.conn.send_request(&x::GrabButton {
             owner_events: false,
             grab_window: ev.window(),
             event_mask: x::EventMask::BUTTON_PRESS
@@ -253,10 +249,9 @@ impl WindowManager {
             button: crate::config::DRAG_BUTTON,
             modifiers: crate::config::MOD_KEY,
         });
-        self.conn.check_request(drag_cookie)?;
 
         // Resize settings
-        let resize_cookie = self.conn.send_request_checked(&x::GrabButton {
+        self.conn.send_request(&x::GrabButton {
             owner_events: false,
             grab_window: ev.window(),
             event_mask: x::EventMask::BUTTON_PRESS
@@ -269,7 +264,6 @@ impl WindowManager {
             button: crate::config::RESIZE_BUTTON,
             modifiers: crate::config::MOD_KEY,
         });
-        self.conn.check_request(resize_cookie)?;
 
         Ok(())
     }
@@ -301,31 +295,29 @@ impl WindowManager {
         if ev.state().contains(crate::config::DRAG_BUTTON_MASK) {
             let client = self.state.drag_client(ev.event(), mouse_pos)?;
 
-            let cookie = self.conn.send_request_checked(&x::ConfigureWindow {
+            self.conn.send_request(&x::ConfigureWindow {
                 window: ev.event(),
                 value_list: &[
                     x::ConfigWindow::X(client.pos().x),
                     x::ConfigWindow::Y(client.pos().y),
                 ],
             });
-            self.conn.check_request(cookie)?;
         } else if ev.state().contains(crate::config::RESIZE_BUTTON_MASK) {
             let client = self.state.drag_resize_client(ev.event(), mouse_pos)?;
-            let cookie = self.conn.send_request_checked(&x::ConfigureWindow {
+            self.conn.send_request(&x::ConfigureWindow {
                 window: ev.event(),
                 value_list: &[
                     x::ConfigWindow::Width(client.size().x as u32),
                     x::ConfigWindow::Height(client.size().y as u32),
                 ],
             });
-            self.conn.check_request(cookie)?;
         }
 
         Ok(())
     }
 
-    fn handle_configure_request_event(&self, ev: x::ConfigureRequestEvent) -> Result<()> {
-        let cookie = self.conn.send_request_checked(&x::ConfigureWindow {
+    fn handle_configure_request_event(&self, ev: x::ConfigureRequestEvent) {
+        self.conn.send_request(&x::ConfigureWindow {
             window: ev.window(),
             value_list: &[
                 x::ConfigWindow::X(ev.x() as i32),
@@ -336,9 +328,6 @@ impl WindowManager {
                 x::ConfigWindow::StackMode(ev.stack_mode()),
             ],
         });
-        self.conn.check_request(cookie)?;
-
-        Ok(())
     }
 
     fn handle_destroy_notify_event(&mut self, ev: x::DestroyNotifyEvent) {
@@ -350,7 +339,7 @@ impl WindowManager {
     fn focus_window(&mut self, window: x::Window) -> Result<()> {
         // Unfocus last focused window
         if let Some(last_focused) = self.state.last_focused() {
-            self.conn.send_request_checked(&x::ChangeWindowAttributes {
+            self.conn.send_request(&x::ChangeWindowAttributes {
                 window: last_focused,
                 value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR)],
             });
@@ -376,9 +365,6 @@ impl WindowManager {
 
         // Set the EWMH hint
         ewmh::set_active_window(&self.conn, &self.atoms, self.state.root, window);
-
-        self.conn.flush()?;
-
         Ok(())
     }
 
@@ -389,10 +375,9 @@ impl WindowManager {
         if wm_protocols.contains(&self.atoms.wm_delete_window) {
             icccm::send_wm_delete_window(&self.conn, &self.atoms, window)?;
         } else {
-            let cookie = self.conn.send_request_checked(&x::KillClient {
+            self.conn.send_request(&x::KillClient {
                 resource: window.resource_id(),
             });
-            self.conn.check_request(cookie)?;
         }
 
         Ok(())

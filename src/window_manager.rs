@@ -67,7 +67,15 @@ impl WindowManager {
         ewmh::set_wm_name(&conn, &self.atoms, self.state.child, "toniowm");
         ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
+        ewmh::set_number_of_desktops(&conn, &self.atoms, self.state.root, 5);
 
+        let workspace_names = vec!["first", "second", "third", "fourth", "fifth"];
+
+        for name in workspace_names.clone() {
+            self.state.add_workspace(name.into()).unwrap();
+        }
+        ewmh::set_desktop_names(&conn, &self.atoms, self.state.root, workspace_names);
+        ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
         conn.flush()?;
 
         // Spawn XCB event thread
@@ -92,13 +100,21 @@ impl WindowManager {
                         self.handle_motion_notify_event(ev)?;
                     }
                     x::Event::ConfigureRequest(ev) => {
-                        self.handle_configure_request_event(ev);
+                        self.handle_configure_request_event(ev)?;
                     }
                     x::Event::MapRequest(ev) => {
                         self.handle_map_request_event(ev)?;
                     },
                     x::Event::DestroyNotify(ev) => {
                         self.handle_destroy_notify_event(ev);
+                    }
+                    x::Event::ClientMessage(ev) => {
+                        // This event is sent if a pager wants to switch ti antoher workspace.
+                        if ev.r#type().resource_id() == self.atoms.net_current_desktop.resource_id() {
+                            if let x::ClientMessageData::Data32([index, ..]) = ev.data() {
+                                self.change_workspace(index as usize)?;
+                            }
+                        }
                     }
                     ev => {
                         println!("Unhandled event: {:?}", ev);
@@ -132,6 +148,9 @@ impl WindowManager {
                             }
                         }
                     }
+                    Command::Workspace{ index } => {
+                        self.change_workspace(index)?;
+                    }
                 }
             }
 
@@ -162,16 +181,29 @@ impl WindowManager {
         Ok(())
     }
 
+    /// This is called when a new window is created.
     fn handle_map_request_event(&mut self, ev: x::MapRequestEvent) -> Result<()> {
+        // Map the window
+        self.conn.send_request(&x::MapWindow {
+            window: ev.window(),
+        });
+
+        if ewmh::get_wm_window_type(&self.conn, &self.atoms, ev.window())?
+            .contains(&self.atoms.net_wm_window_type_dock)
+        {
+            // Do not manage dock windows
+            return Ok(());
+        }
+
         // Ask the X server for the window's geometry
         let cookie = self.conn.send_request(&x::GetGeometry {
             drawable: x::Drawable::Window(ev.window()),
         });
-        let resp = self.conn.wait_for_reply(cookie)?;
+        let reply = self.conn.wait_for_reply(cookie)?;
 
         // Add the window to the state
-        let pos = Vector2D::new(resp.x().into(), resp.y().into());
-        let size = Vector2D::new(resp.width().into(), resp.height().into());
+        let pos = Vector2D::new(reply.x().into(), reply.y().into());
+        let size = Vector2D::new(reply.width().into(), reply.height().into());
         self.state.add_client(ev.window(), pos, size)?;
 
         // Set border width
@@ -202,11 +234,6 @@ impl WindowManager {
             parent: self.state.root,
             x: 0,
             y: 0,
-        });
-
-        // Manage the window
-        self.conn.send_request(&x::MapWindow {
-            window: ev.window(),
         });
 
         // Focus the window
@@ -316,18 +343,25 @@ impl WindowManager {
         Ok(())
     }
 
-    fn handle_configure_request_event(&self, ev: x::ConfigureRequestEvent) {
-        self.conn.send_request(&x::ConfigureWindow {
-            window: ev.window(),
-            value_list: &[
-                x::ConfigWindow::X(ev.x() as i32),
-                x::ConfigWindow::Y(ev.y() as i32),
-                x::ConfigWindow::Width(ev.width() as u32),
-                x::ConfigWindow::Height(ev.height() as u32),
-                x::ConfigWindow::BorderWidth(crate::config::BORDER_WIDTH as u32),
-                x::ConfigWindow::StackMode(ev.stack_mode()),
-            ],
-        });
+    fn handle_configure_request_event(&self, ev: x::ConfigureRequestEvent) -> Result<()> {
+        // Do not manage dock windows
+        if !ewmh::get_wm_window_type(&self.conn, &self.atoms, ev.window())?
+            .contains(&self.atoms.net_wm_window_type_dock)
+        {
+            self.conn.send_request(&x::ConfigureWindow {
+                window: ev.window(),
+                value_list: &[
+                    x::ConfigWindow::X(ev.x() as i32),
+                    x::ConfigWindow::Y(ev.y() as i32),
+                    x::ConfigWindow::Width(ev.width() as u32),
+                    x::ConfigWindow::Height(ev.height() as u32),
+                    x::ConfigWindow::BorderWidth(crate::config::BORDER_WIDTH as u32),
+                    x::ConfigWindow::StackMode(ev.stack_mode()),
+                ],
+            });
+        }
+
+        Ok(())
     }
 
     fn handle_destroy_notify_event(&mut self, ev: x::DestroyNotifyEvent) {
@@ -378,6 +412,23 @@ impl WindowManager {
             self.conn.send_request(&x::KillClient {
                 resource: window.resource_id(),
             });
+        }
+
+        Ok(())
+    }
+
+    fn change_workspace(&mut self, index: usize) -> Result<()> {
+        // Unmap all windows on the current workspace
+        for (window, _) in self.state.active_workspace_clients().iter() {
+            self.conn.send_request(&x::UnmapWindow { window: *window });
+        }
+
+        self.state.set_active_workspace(index)?;
+        ewmh::set_current_desktop(&self.conn, &self.atoms, self.state.root, index as u32);
+
+        // Map all windows on the new workspace
+        for (window, _) in self.state.active_workspace_clients().iter() {
+            self.conn.send_request(&x::MapWindow { window: *window });
         }
 
         Ok(())

@@ -46,6 +46,9 @@ pub enum Command {
         #[clap(flatten)]
         selector: Selector,
     },
+    Workspace {
+        index: usize,
+    },
 }
 
 #[derive(ValueEnum, Clone)]

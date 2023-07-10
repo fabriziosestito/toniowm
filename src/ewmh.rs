@@ -19,7 +19,7 @@ pub fn get_wm_window_type(
     });
     let reply = conn.wait_for_reply(cookie)?;
 
-    Ok(reply.value::<xcb::x::Atom>().into())
+    Ok(reply.value().into())
 }
 
 // Set the _NET_SUPPORTED property on the root window.

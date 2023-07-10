@@ -16,6 +16,9 @@ pub enum Command {
     Close {
         selector: Selector,
     },
+    Workspace {
+        index: usize,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -26,7 +29,7 @@ pub enum Direction {
     South,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Selector {
     Focused,
     Window(u32),
@@ -46,6 +49,7 @@ impl From<args::Command> for Command {
             args::Command::Close { selector } => Self::Close {
                 selector: selector.into(),
             },
+            args::Command::Workspace { index } => Self::Workspace { index },
         }
     }
 }

@@ -1,4 +1,4 @@
-use indexmap::IndexMap;
+use indexmap::{indexmap, IndexMap};
 use thiserror::Error;
 use xcb::{x, Xid, XidNew};
 
@@ -11,10 +11,20 @@ const MIN_CLIENT_SIZE: Vector2D = Vector2D { x: 32, y: 32 };
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Client not found")]
+    #[error("Client not found.")]
     ClientNotFound,
-    #[error("Client already exists")]
+    #[error("Client already exists.")]
     ClientAlreadyExists,
+    #[error("Workspace already exists.")]
+    WorkspaceAlreadyExists,
+    #[error("Workspace not found.")]
+    WorkspaceNotFound,
+}
+
+#[derive(Default)]
+pub struct Workspace {
+    /// The list of clients managed by the workspace
+    clients: IndexMap<x::Window, Client>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,15 +53,17 @@ impl Client {
 }
 
 pub struct State {
-    /// The root window
+    /// The root window,.
     pub root: x::Window,
-    /// The window manager window
+    /// The window manager window.
     pub child: x::Window,
-    /// The list of clients managed by the window manager
-    clients: IndexMap<x::Window, Client>,
-    /// The currently focused window
+    /// The list of workspaces managed by the window manager
+    workspaces: IndexMap<String, Workspace>,
+    /// The currently active workspace.
+    active_workspace: usize,
+    /// The currently focused window.
     focused: Option<x::Window>,
-    /// The last focused window
+    /// The last focused window.
     last_focused: Option<x::Window>,
     /// The start position of the cursor when dragging a window.
     /// This is used to calculate the new position of the window.
@@ -66,7 +78,8 @@ impl Default for State {
         Self {
             root: x::Window::none(),
             child: x::Window::none(),
-            clients: IndexMap::new(),
+            workspaces: indexmap! {"0".to_owned() => Workspace::default()},
+            active_workspace: 0,
             focused: Default::default(),
             last_focused: Default::default(),
             drag_start_pos: Default::default(),
@@ -76,17 +89,42 @@ impl Default for State {
 }
 
 impl State {
+    /// Add a workspace to the state.
+    ///
+    /// The name of the workspace must be unique.
+    pub fn add_workspace(&mut self, name: String) -> Result<(), Error> {
+        if self.workspaces.contains_key(&name) {
+            Err(Error::WorkspaceAlreadyExists)
+        } else {
+            self.workspaces.insert(name, Workspace::default());
+
+            Ok(())
+        }
+    }
+
+    ///  Set a workspace as active.
+    ///
+    /// Return an error if the workspace is not found.
+    pub fn set_active_workspace(&mut self, index: usize) -> Result<(), Error> {
+        if index >= self.workspaces.len() {
+            Err(Error::WorkspaceNotFound)
+        } else {
+            self.active_workspace = index;
+            Ok(())
+        }
+    }
+
     pub fn add_client(
         &mut self,
         window: x::Window,
         pos: Vector2D,
         size: Vector2D,
     ) -> Result<Client, Error> {
-        if self.clients.contains_key(&window) {
+        if self.active_workspace_clients().contains_key(&window) {
             Err(Error::ClientAlreadyExists)
         } else {
             let client = Client { window, pos, size };
-            self.clients.insert(window, client);
+            self.active_workspace_clients_mut().insert(window, client);
 
             Ok(client)
         }
@@ -96,7 +134,11 @@ impl State {
     ///
     /// Return an error if the client is not found.
     pub fn remove_client(&mut self, window: x::Window) -> Result<(), Error> {
-        if self.clients.shift_remove(&window).is_none() {
+        if self
+            .active_workspace_clients_mut()
+            .shift_remove(&window)
+            .is_none()
+        {
             Err(Error::ClientNotFound)
         } else {
             if self.focused == Some(window) {
@@ -110,9 +152,9 @@ impl State {
     ///
     /// Return an error if the client is not found.
     pub fn drag_client(&mut self, window: x::Window, mouse_pos: Vector2D) -> Result<Client, Error> {
-        if let Some(client) = self.clients.get_mut(&window) {
-            client.pos = self.drag_start_frame_pos + mouse_pos - self.drag_start_pos;
-
+        let new_pos = self.drag_start_frame_pos + mouse_pos - self.drag_start_pos;
+        if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
+            client.pos = new_pos;
             Ok(client.to_owned())
         } else {
             Err(Error::ClientNotFound)
@@ -127,7 +169,7 @@ impl State {
         window: x::Window,
         mouse_pos: Vector2D,
     ) -> Result<Client, Error> {
-        if let Some(client) = self.clients.get_mut(&window) {
+        if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
             client.size = (mouse_pos - client.pos).max(MIN_CLIENT_SIZE);
 
             Ok(client.to_owned())
@@ -140,7 +182,7 @@ impl State {
     ///
     /// Return an error if the client is not found.
     pub fn teleport_client(&mut self, window: x::Window, pos: Vector2D) -> Result<Client, Error> {
-        if let Some(client) = self.clients.get_mut(&window) {
+        if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
             client.pos = pos;
 
             Ok(client.to_owned())
@@ -158,7 +200,7 @@ impl State {
             return Ok(());
         }
 
-        if self.clients.contains_key(&window) {
+        if self.active_workspace_clients().contains_key(&window) {
             self.set_focused(Some(window));
 
             Ok(())
@@ -182,14 +224,14 @@ impl State {
         let mut min_distance = std::i32::MAX;
         let mut closest_client = None;
 
-        for (_, c) in self.clients.clone() {
+        for (_, c) in self.active_workspace_clients().clone() {
             if c.window == client.window {
                 continue; // Skip the focused window
             }
             let dx = c.pos.x - client.pos.x;
             let dy = c.pos.y - client.pos.y;
             // Euclidean distance approximation
-            // We do not need to calculate the square root to compare distances
+            // We do not need to calculate the square root to compare distances.
             distance = dx.pow(2) + dy.pow(2);
 
             match direction {
@@ -229,6 +271,28 @@ impl State {
         }
     }
 
+    /// Get the active workspace clients.
+    pub fn active_workspace_clients(&self) -> &IndexMap<x::Window, Client> {
+        // We can unwrap here because we know the workspace exists.
+        let (_, workspace) = self.workspaces.get_index(self.active_workspace).unwrap();
+
+        &workspace.clients
+    }
+
+    /// Get the active workspace clients.
+    fn active_workspace_clients_mut(&mut self) -> &mut IndexMap<x::Window, Client> {
+        // We can unwrap here because we know the workspace exists.
+        let (_, workspace) = self
+            .workspaces
+            .get_index_mut(self.active_workspace)
+            .unwrap();
+
+        &mut workspace.clients
+    }
+
+    /// Select a client using a selector.
+    ///
+    /// Return an error if no matching client has been found.
     pub fn select_client(&self, selector: Selector) -> Result<Client, Error> {
         let window = match selector {
             Selector::Focused => {
@@ -241,17 +305,20 @@ impl State {
             Selector::Window(window) => unsafe { x::Window::new(window) },
         };
 
-        match self.clients.get(&window).cloned() {
+        match self.active_workspace_clients().get(&window).cloned() {
             Some(client) => Ok(client),
             None => Err(Error::ClientNotFound),
         }
     }
 
+    /// Set the focused window.
+    /// Save the last focused window.
     fn set_focused(&mut self, window: Option<x::Window>) {
         self.last_focused = self.focused;
         self.focused = window;
     }
 
+    /// Get the last focused window.
     pub fn last_focused(&self) -> Option<x::Window> {
         self.last_focused
     }
@@ -261,6 +328,26 @@ impl State {
 mod tests {
     use super::*;
     use xcb::XidNew;
+
+    #[test]
+    fn test_add_workspace() {
+        let mut state = State::default();
+        state.add_workspace("test".to_owned()).unwrap();
+
+        assert_eq!(state.workspaces.len(), 2);
+        assert!(state.workspaces.contains_key("test"));
+    }
+
+    #[test]
+    fn test_add_workspace_already_exists() {
+        let mut state = State::default();
+        state.add_workspace("test".to_owned()).unwrap();
+
+        assert!(matches!(
+            state.add_workspace("test".to_owned()),
+            Err(Error::WorkspaceAlreadyExists)
+        ));
+    }
 
     #[test]
     fn test_add_client() {
@@ -274,6 +361,11 @@ mod tests {
         assert_eq!(client.window, window);
         assert_eq!(client.pos, pos);
         assert_eq!(client.size, size);
+
+        assert_eq!(
+            &indexmap! {window => client},
+            state.active_workspace_clients()
+        );
     }
 
     #[test]
@@ -303,7 +395,7 @@ mod tests {
         let result = state.remove_client(window);
 
         assert!(matches!(result, Ok(())));
-        assert_eq!(state.clients.len(), 0);
+        assert_eq!(state.active_workspace_clients().len(), 0);
         assert_eq!(state.focused, None);
     }
 
@@ -329,7 +421,14 @@ mod tests {
         let new_pos = Vector2D::new(10, 10);
         let client = state.drag_client(window, new_pos).unwrap();
 
-        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(
+            state
+                .active_workspace_clients()
+                .get(&window)
+                .unwrap()
+                .clone(),
+            client
+        );
         assert_eq!(client.pos, new_pos);
     }
 
@@ -355,7 +454,14 @@ mod tests {
         let new_size = Vector2D::new(50, 50);
         let client = state.drag_resize_client(window, new_size).unwrap();
 
-        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(
+            state
+                .active_workspace_clients()
+                .get(&window)
+                .unwrap()
+                .clone(),
+            client
+        );
         assert_eq!(client.size, new_size);
     }
 
@@ -397,7 +503,14 @@ mod tests {
         let new_pos = Vector2D::new(10, 10);
         let client = state.teleport_client(window, new_pos).unwrap();
 
-        assert_eq!(state.clients.get(&window).unwrap().clone(), client);
+        assert_eq!(
+            state
+                .active_workspace_clients()
+                .get(&window)
+                .unwrap()
+                .clone(),
+            client
+        );
         assert_eq!(client.pos, new_pos);
     }
 

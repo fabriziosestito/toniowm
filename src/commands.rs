@@ -11,13 +11,13 @@ pub enum Command {
     Quit,
     FocusClosest {
         direction: Direction,
-        selector: Selector,
+        selector: WindowSelector,
     },
     Close {
-        selector: Selector,
+        selector: WindowSelector,
     },
-    Workspace {
-        index: usize,
+    SelectWorkspace {
+        selector: WorkspaceSelector,
     },
 }
 
@@ -30,9 +30,15 @@ pub enum Direction {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Selector {
+pub enum WindowSelector {
     Focused,
     Window(u32),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum WorkspaceSelector {
+    Index(usize),
+    Name(String),
 }
 
 impl From<args::Command> for Command {
@@ -49,7 +55,9 @@ impl From<args::Command> for Command {
             args::Command::Close { selector } => Self::Close {
                 selector: selector.into(),
             },
-            args::Command::Workspace { index } => Self::Workspace { index },
+            args::Command::SelectWorkspace { selector } => Self::SelectWorkspace {
+                selector: selector.into(),
+            },
         }
     }
 }
@@ -65,20 +73,35 @@ impl From<args::Direction> for Direction {
     }
 }
 
-impl From<args::Selector> for Selector {
-    fn from(selector: args::Selector) -> Self {
+impl From<args::WindowSelector> for WindowSelector {
+    fn from(selector: args::WindowSelector) -> Self {
         match selector {
-            args::Selector {
+            args::WindowSelector {
                 focused: true,
                 window: None,
             } => Self::Focused,
-            args::Selector {
+            args::WindowSelector {
                 window: Some(window),
                 ..
-            } => {
-                println!("window: {}", window);
-                Self::Window(window)
-            }
+            } => Self::Window(window),
+            // This is unreachable because the clap parser
+            // will always return either a focused or a window.
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<args::WorkspaceSelector> for WorkspaceSelector {
+    fn from(selector: args::WorkspaceSelector) -> Self {
+        match selector {
+            args::WorkspaceSelector {
+                index: Some(index),
+                name: None,
+            } => Self::Index(index),
+            args::WorkspaceSelector {
+                name: Some(name),
+                index: None,
+            } => Self::Name(name),
             // This is unreachable because the clap parser
             // will always return either a focused or a window.
             _ => unreachable!(),

@@ -361,10 +361,10 @@ mod tests {
     #[test]
     fn test_activate_workspace() {
         let mut state = State::default();
-        state.add_workspace("1".to_owned()).unwrap();
+        state.add_workspace("test".to_owned()).unwrap();
 
         let index = state
-            .activate_workspace(WorkspaceSelector::Name("1".to_string()))
+            .activate_workspace(WorkspaceSelector::Name("test".to_string()))
             .unwrap();
 
         assert_eq!(1, index);
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn test_activate_workspace_not_found() {
         let mut state = State::default();
-        let result = state.activate_workspace(WorkspaceSelector::Name("1".to_string()));
+        let result = state.activate_workspace(WorkspaceSelector::Name("test".to_string()));
 
         assert!(matches!(result, Err(Error::WorkspaceNotFound)));
         assert_eq!(0, state.active_workspace);

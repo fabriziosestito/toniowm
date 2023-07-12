@@ -40,14 +40,15 @@ pub enum Command {
     FocusClosest {
         direction: Direction,
         #[clap(flatten)]
-        selector: Selector,
+        selector: WindowSelector,
     },
     Close {
         #[clap(flatten)]
-        selector: Selector,
+        selector: WindowSelector,
     },
-    Workspace {
-        index: usize,
+    SelectWorkspace {
+        #[clap(flatten)]
+        selector: WorkspaceSelector,
     },
 }
 
@@ -61,10 +62,20 @@ pub enum Direction {
 
 #[derive(clap::Args, Clone)]
 #[group(multiple = false)]
-pub struct Selector {
+pub struct WindowSelector {
     #[clap(long, short, default_value = "true")]
     pub focused: bool,
 
     #[clap(long, short)]
     pub window: Option<u32>,
+}
+
+#[derive(clap::Args, Clone)]
+#[group(multiple = false)]
+pub struct WorkspaceSelector {
+    #[clap(long, short)]
+    pub index: Option<usize>,
+
+    #[clap(long, short)]
+    pub name: Option<String>,
 }

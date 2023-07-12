@@ -4,7 +4,7 @@ use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
 use crate::atoms::Atoms;
-use crate::commands::Command;
+use crate::commands::{Command, WorkspaceSelector};
 use crate::state::State;
 use crate::vector::Vector2D;
 use crate::{ewmh, icccm};
@@ -67,14 +67,18 @@ impl WindowManager {
         ewmh::set_wm_name(&conn, &self.atoms, self.state.child, "toniowm");
         ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
-        ewmh::set_number_of_desktops(&conn, &self.atoms, self.state.root, 5);
+        ewmh::set_number_of_desktops(&conn, &self.atoms, self.state.root, 4);
 
-        let workspace_names = vec!["first", "second", "third", "fourth", "fifth"];
+        self.state.add_workspace("2".to_owned()).unwrap();
+        self.state.add_workspace("3".to_owned()).unwrap();
+        self.state.add_workspace("4".to_owned()).unwrap();
 
-        for name in workspace_names.clone() {
-            self.state.add_workspace(name.into()).unwrap();
-        }
-        ewmh::set_desktop_names(&conn, &self.atoms, self.state.root, workspace_names);
+        ewmh::set_desktop_names(
+            &conn,
+            &self.atoms,
+            self.state.root,
+            vec!["1", "2", "3", "4"],
+        );
         ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
         conn.flush()?;
 
@@ -112,7 +116,7 @@ impl WindowManager {
                         // This event is sent if a pager wants to switch ti antoher workspace.
                         if ev.r#type().resource_id() == self.atoms.net_current_desktop.resource_id() {
                             if let x::ClientMessageData::Data32([index, ..]) = ev.data() {
-                                self.change_workspace(index as usize)?;
+                                self.activate_workspace(WorkspaceSelector::Index(index as usize))?;
                             }
                         }
                     }
@@ -148,8 +152,8 @@ impl WindowManager {
                             }
                         }
                     }
-                    Command::Workspace{ index } => {
-                        self.change_workspace(index)?;
+                    Command::SelectWorkspace{ selector } => {
+                        self.activate_workspace(selector)?;
                     }
                 }
             }
@@ -417,14 +421,19 @@ impl WindowManager {
         Ok(())
     }
 
-    fn change_workspace(&mut self, index: usize) -> Result<()> {
+    fn activate_workspace(&mut self, selector: WorkspaceSelector) -> Result<()> {
         // Unmap all windows on the current workspace
         for (window, _) in self.state.active_workspace_clients().iter() {
             self.conn.send_request(&x::UnmapWindow { window: *window });
         }
 
-        self.state.set_active_workspace(index)?;
-        ewmh::set_current_desktop(&self.conn, &self.atoms, self.state.root, index as u32);
+        let workspace_index = self.state.activate_workspace(selector)?;
+        ewmh::set_current_desktop(
+            &self.conn,
+            &self.atoms,
+            self.state.root,
+            workspace_index as u32,
+        );
 
         // Map all windows on the new workspace
         for (window, _) in self.state.active_workspace_clients().iter() {

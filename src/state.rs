@@ -3,7 +3,7 @@ use thiserror::Error;
 use xcb::{x, Xid, XidNew};
 
 use crate::{
-    commands::{Direction, Selector},
+    commands::{Direction, WindowSelector, WorkspaceSelector},
     vector::Vector2D,
 };
 
@@ -21,7 +21,7 @@ pub enum Error {
     WorkspaceNotFound,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Workspace {
     /// The list of clients managed by the workspace
     clients: IndexMap<x::Window, Client>,
@@ -78,7 +78,7 @@ impl Default for State {
         Self {
             root: x::Window::none(),
             child: x::Window::none(),
-            workspaces: indexmap! {"0".to_owned() => Workspace::default()},
+            workspaces: indexmap! {"1".to_owned() => Workspace::default()},
             active_workspace: 0,
             focused: Default::default(),
             last_focused: Default::default(),
@@ -102,18 +102,27 @@ impl State {
         }
     }
 
-    ///  Set a workspace as active.
+    ///  Active a workspace as active and return its index.
     ///
-    /// Return an error if the workspace is not found.
-    pub fn set_active_workspace(&mut self, index: usize) -> Result<(), Error> {
-        if index >= self.workspaces.len() {
-            Err(Error::WorkspaceNotFound)
-        } else {
+    /// Accepts a selector.
+    /// Return an error if no matching workspace is not found.
+    pub fn activate_workspace(&mut self, selector: WorkspaceSelector) -> Result<usize, Error> {
+        let index = match selector {
+            WorkspaceSelector::Index(index) => Some(index),
+            WorkspaceSelector::Name(name) => self.workspaces.get_index_of(&name),
+        };
+        if let Some(index) = index {
             self.active_workspace = index;
-            Ok(())
+
+            Ok(index)
+        } else {
+            Err(Error::WorkspaceNotFound)
         }
     }
 
+    /// Add a client to the state.
+    ///
+    /// Return an error if the client already exists.
     pub fn add_client(
         &mut self,
         window: x::Window,
@@ -215,7 +224,7 @@ impl State {
     /// Return an error if no client can be selected.
     pub fn focus_closest_client(
         &mut self,
-        selector: Selector,
+        selector: WindowSelector,
         direction: Direction,
     ) -> Result<Option<Client>, Error> {
         let client = self.select_client(selector)?;
@@ -293,16 +302,16 @@ impl State {
     /// Select a client using a selector.
     ///
     /// Return an error if no matching client has been found.
-    pub fn select_client(&self, selector: Selector) -> Result<Client, Error> {
+    pub fn select_client(&self, selector: WindowSelector) -> Result<Client, Error> {
         let window = match selector {
-            Selector::Focused => {
+            WindowSelector::Focused => {
                 if let Some(window) = self.focused {
                     window
                 } else {
                     return Err(Error::ClientNotFound);
                 }
             }
-            Selector::Window(window) => unsafe { x::Window::new(window) },
+            WindowSelector::Window(window) => unsafe { x::Window::new(window) },
         };
 
         match self.active_workspace_clients().get(&window).cloned() {
@@ -347,6 +356,28 @@ mod tests {
             state.add_workspace("test".to_owned()),
             Err(Error::WorkspaceAlreadyExists)
         ));
+    }
+
+    #[test]
+    fn test_activate_workspace() {
+        let mut state = State::default();
+        state.add_workspace("1".to_owned()).unwrap();
+
+        let index = state
+            .activate_workspace(WorkspaceSelector::Name("1".to_string()))
+            .unwrap();
+
+        assert_eq!(1, index);
+        assert_eq!(1, state.active_workspace);
+    }
+
+    #[test]
+    fn test_activate_workspace_not_found() {
+        let mut state = State::default();
+        let result = state.activate_workspace(WorkspaceSelector::Name("1".to_string()));
+
+        assert!(matches!(result, Err(Error::WorkspaceNotFound)));
+        assert_eq!(0, state.active_workspace);
     }
 
     #[test]
@@ -581,28 +612,34 @@ mod tests {
             .unwrap();
 
         let client = state
-            .focus_closest_client(Selector::Window(window_ne.resource_id()), Direction::East)
+            .focus_closest_client(
+                WindowSelector::Window(window_ne.resource_id()),
+                Direction::East,
+            )
             .unwrap();
 
         assert_eq!(Some(client_nw), client);
         assert_eq!(state.focused, Some(client_nw.window));
 
         let client = state
-            .focus_closest_client(Selector::Focused, Direction::South)
+            .focus_closest_client(WindowSelector::Focused, Direction::South)
             .unwrap();
 
         assert_eq!(Some(client_sw), client);
         assert_eq!(state.focused, Some(client_sw.window));
 
         let client = state
-            .focus_closest_client(Selector::Window(window_sw.resource_id()), Direction::West)
+            .focus_closest_client(
+                WindowSelector::Window(window_sw.resource_id()),
+                Direction::West,
+            )
             .unwrap();
 
         assert_eq!(Some(client_se), client);
         assert_eq!(state.focused, Some(client_se.window));
 
         let client = state
-            .focus_closest_client(Selector::Focused, Direction::North)
+            .focus_closest_client(WindowSelector::Focused, Direction::North)
             .unwrap();
 
         assert_eq!(Some(client_ne), client);
@@ -614,8 +651,10 @@ mod tests {
         let window = unsafe { x::Window::new(123) };
         let mut state = State::default();
 
-        let result =
-            state.focus_closest_client(Selector::Window(window.resource_id()), Direction::East);
+        let result = state.focus_closest_client(
+            WindowSelector::Window(window.resource_id()),
+            Direction::East,
+        );
 
         assert!(matches!(result, Err(Error::ClientNotFound)));
     }
@@ -649,13 +688,13 @@ mod tests {
         let expected_client = state.add_client(window, pos, size).unwrap();
 
         let client = state
-            .select_client(Selector::Window(window.resource_id()))
+            .select_client(WindowSelector::Window(window.resource_id()))
             .unwrap();
         assert_eq!(client, expected_client);
 
         state.focus_client(window).unwrap();
 
-        let client = state.select_client(Selector::Focused).unwrap();
+        let client = state.select_client(WindowSelector::Focused).unwrap();
         assert_eq!(client, expected_client);
     }
 
@@ -664,10 +703,10 @@ mod tests {
         let state = State::default();
         let window = unsafe { x::Window::new(123) };
 
-        let result = state.select_client(Selector::Window(window.resource_id()));
+        let result = state.select_client(WindowSelector::Window(window.resource_id()));
         assert!(matches!(result, Err(Error::ClientNotFound)));
 
-        let result = state.select_client(Selector::Focused);
+        let result = state.select_client(WindowSelector::Focused);
         assert!(matches!(result, Err(Error::ClientNotFound)));
     }
 }

@@ -383,6 +383,13 @@ impl WindowManager {
             });
         }
 
+        // Set the input focus
+        self.conn.send_request(&x::SetInputFocus {
+            revert_to: x::InputFocus::PointerRoot,
+            focus: window,
+            time: x::CURRENT_TIME,
+        });
+
         // Select and focus
         self.conn.send_request(&x::ChangeWindowAttributes {
             window,

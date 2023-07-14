@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use crossbeam::channel;
+use std::process;
 use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
@@ -67,19 +68,12 @@ impl WindowManager {
         ewmh::set_wm_name(&conn, &self.atoms, self.state.child, "toniowm");
         ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
-        ewmh::set_number_of_desktops(&conn, &self.atoms, self.state.root, 4);
-
-        self.state.add_workspace("2".to_owned()).unwrap();
-        self.state.add_workspace("3".to_owned()).unwrap();
-        self.state.add_workspace("4".to_owned()).unwrap();
-
-        ewmh::set_desktop_names(
-            &conn,
-            &self.atoms,
-            self.state.root,
-            vec!["1", "2", "3", "4"],
-        );
         ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
+        process::Command::new("./toniorc")
+            .spawn()
+            .with_context(|| "Failed to load toniorc")?;
+        self.refresh_desktops_hints();
+
         conn.flush()?;
 
         // Spawn XCB event thread
@@ -151,6 +145,14 @@ impl WindowManager {
                                 println!("Client not found");
                             }
                         }
+                    }
+                    Command::AddWorkspace{ name } => {
+                        self.state.add_workspace(name)?;
+                        self.refresh_desktops_hints();
+                    }
+                    Command::RenameWorkspace{ selector, name } => {
+                        self.state.rename_workspace(selector, name)?;
+                        self.refresh_desktops_hints();
                     }
                     Command::SelectWorkspace{ selector } => {
                         self.activate_workspace(selector)?;
@@ -448,5 +450,21 @@ impl WindowManager {
         }
 
         Ok(())
+    }
+
+    fn refresh_desktops_hints(&self) {
+        ewmh::set_number_of_desktops(
+            &self.conn,
+            &self.atoms,
+            self.state.root,
+            self.state.workspaces().len() as u32,
+        );
+
+        ewmh::set_desktop_names(
+            &self.conn,
+            &self.atoms,
+            self.state.root,
+            self.state.workspaces().iter().map(|w| w.name()).collect(),
+        );
     }
 }

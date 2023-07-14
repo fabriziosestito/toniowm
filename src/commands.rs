@@ -16,6 +16,13 @@ pub enum Command {
     Close {
         selector: WindowSelector,
     },
+    AddWorkspace {
+        name: Option<String>,
+    },
+    RenameWorkspace {
+        selector: WorkspaceSelector,
+        name: String,
+    },
     SelectWorkspace {
         selector: WorkspaceSelector,
     },
@@ -54,6 +61,14 @@ impl From<args::Command> for Command {
             },
             args::Command::Close { selector } => Self::Close {
                 selector: selector.into(),
+            },
+            args::Command::AddWorkspace { name } => Self::AddWorkspace { name },
+            args::Command::RenameWorkspace {
+                selector,
+                new_name: name,
+            } => Self::RenameWorkspace {
+                selector: selector.into(),
+                name,
             },
             args::Command::SelectWorkspace { selector } => Self::SelectWorkspace {
                 selector: selector.into(),

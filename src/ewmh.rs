@@ -108,7 +108,12 @@ pub fn set_number_of_desktops(conn: &xcb::Connection, atoms: &Atoms, root: x::Wi
 
 /// Set the _NET_DESKTOP_NAMES property on the root window.
 /// This is needed to indicate the names of the desktops.
-pub fn set_desktop_names(conn: &xcb::Connection, atoms: &Atoms, root: x::Window, names: Vec<&str>) {
+pub fn set_desktop_names(
+    conn: &xcb::Connection,
+    atoms: &Atoms,
+    root: x::Window,
+    names: Vec<String>,
+) {
     let mut data = names.join("\0").as_bytes().to_vec();
     data.push(b'\0');
 

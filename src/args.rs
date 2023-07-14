@@ -46,6 +46,16 @@ pub enum Command {
         #[clap(flatten)]
         selector: WindowSelector,
     },
+    AddWorkspace {
+        #[clap(short, long)]
+        name: Option<String>,
+    },
+    RenameWorkspace {
+        #[clap(flatten)]
+        selector: WorkspaceSelector,
+        #[clap( value_name = "NEW_NAME" )]
+        new_name: String,
+    },
     SelectWorkspace {
         #[clap(flatten)]
         selector: WorkspaceSelector,
@@ -71,7 +81,7 @@ pub struct WindowSelector {
 }
 
 #[derive(clap::Args, Clone)]
-#[group(multiple = false)]
+#[group(multiple = false, required = true)]
 pub struct WorkspaceSelector {
     #[clap(long, short)]
     pub index: Option<usize>,

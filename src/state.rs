@@ -1,4 +1,4 @@
-use indexmap::{indexmap, IndexMap};
+use indexmap::{map::MutableKeys, IndexMap};
 use thiserror::Error;
 use xcb::{x, Xid, XidNew};
 
@@ -21,10 +21,18 @@ pub enum Error {
     WorkspaceNotFound,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Workspace {
+    /// The name of the workspace
+    name: String,
     /// The list of clients managed by the workspace
     clients: IndexMap<x::Window, Client>,
+}
+
+impl Workspace {
+    pub fn name(&self) -> String {
+        self.name.to_owned()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,31 +83,74 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        Self {
+        let mut state = Self {
             root: x::Window::none(),
             child: x::Window::none(),
-            workspaces: indexmap! {"1".to_owned() => Workspace::default()},
+            workspaces: Default::default(),
             active_workspace: 0,
             focused: Default::default(),
             last_focused: Default::default(),
             drag_start_pos: Default::default(),
             drag_start_frame_pos: Default::default(),
-        }
+        };
+
+        state.add_workspace(None).unwrap();
+
+        state
     }
 }
 
 impl State {
     /// Add a workspace to the state.
     ///
+    /// If no name is provided, the workspace will be named after the index.
     /// The name of the workspace must be unique.
-    pub fn add_workspace(&mut self, name: String) -> Result<(), Error> {
+    pub fn add_workspace(&mut self, name: Option<String>) -> Result<Workspace, Error> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            self.workspaces.len().to_string()
+        };
+
         if self.workspaces.contains_key(&name) {
             Err(Error::WorkspaceAlreadyExists)
         } else {
-            self.workspaces.insert(name, Workspace::default());
+            let workspace = Workspace {
+                name: name.clone(),
+                clients: IndexMap::new(),
+            };
 
-            Ok(())
+            self.workspaces.insert(name, workspace.clone());
+            Ok(workspace)
         }
+    }
+
+    pub fn rename_workspace(
+        &mut self,
+        selector: WorkspaceSelector,
+        name: String,
+    ) -> Result<(), Error> {
+        let (old_name, workspace) = match selector {
+            WorkspaceSelector::Index(index) => {
+                if let Some((old_name, workspace)) = self.workspaces.get_index_mut(index) {
+                    (old_name, workspace)
+                } else {
+                    return Err(Error::WorkspaceNotFound);
+                }
+            }
+            WorkspaceSelector::Name(name) => {
+                if let Some((_, old_name, workspace)) = self.workspaces.get_full_mut2(&name) {
+                    (old_name, workspace)
+                } else {
+                    return Err(Error::WorkspaceNotFound);
+                }
+            }
+        };
+
+        *old_name = name.clone();
+        workspace.name = name;
+
+        Ok(())
     }
 
     ///  Active a workspace as active and return its index.
@@ -118,6 +169,11 @@ impl State {
         } else {
             Err(Error::WorkspaceNotFound)
         }
+    }
+
+    /// Return a list of the workspaces
+    pub fn workspaces(&self) -> Vec<Workspace> {
+        self.workspaces.values().cloned().collect()
     }
 
     /// Add a client to the state.
@@ -341,27 +397,49 @@ mod tests {
     #[test]
     fn test_add_workspace() {
         let mut state = State::default();
-        state.add_workspace("test".to_owned()).unwrap();
+        state.add_workspace(Some("test".to_owned())).unwrap();
 
         assert_eq!(state.workspaces.len(), 2);
         assert!(state.workspaces.contains_key("test"));
     }
 
     #[test]
+    fn test_add_workspace_no_name() {
+        let mut state = State::default();
+        state.add_workspace(None).unwrap();
+
+        assert_eq!(state.workspaces.len(), 2);
+        assert!(state.workspaces.contains_key("1"));
+    }
+
+    #[test]
     fn test_add_workspace_already_exists() {
         let mut state = State::default();
-        state.add_workspace("test".to_owned()).unwrap();
+        state.add_workspace(Some("test".to_owned())).unwrap();
 
         assert!(matches!(
-            state.add_workspace("test".to_owned()),
+            state.add_workspace(Some("test".to_owned())),
             Err(Error::WorkspaceAlreadyExists)
         ));
     }
 
     #[test]
+    fn workspaces() {
+        let mut state = State::default();
+        let workspace_2 = state.add_workspace(Some("2".to_owned())).unwrap();
+        let workspace_3 = state.add_workspace(Some("3".to_owned())).unwrap();
+
+        let workspaces = state.workspaces();
+
+        assert_eq!(workspaces.len(), 3);
+        assert_eq!(workspaces[1], workspace_2);
+        assert_eq!(workspaces[2], workspace_3);
+    }
+
+    #[test]
     fn test_activate_workspace() {
         let mut state = State::default();
-        state.add_workspace("test".to_owned()).unwrap();
+        state.add_workspace(Some("test".to_owned())).unwrap();
 
         let index = state
             .activate_workspace(WorkspaceSelector::Name("test".to_string()))
@@ -394,7 +472,7 @@ mod tests {
         assert_eq!(client.size, size);
 
         assert_eq!(
-            &indexmap! {window => client},
+            &indexmap::indexmap! {window => client},
             state.active_workspace_clients()
         );
     }

@@ -18,25 +18,31 @@ mod window_manager;
 fn main() -> Result<()> {
     let cli = args::Args::parse();
     match cli.command {
-        Some(args::Commands::Start { autostart }) => start(autostart),
+        Some(args::Commands::Start {
+            autostart: autostart_file_path,
+        }) => start(autostart_file_path),
         Some(args::Commands::Client(command)) => {
             client::dispatch_command(command.into());
+
             Ok(())
         }
         _ => Ok(()),
     }
 }
 
-fn start(autostart: PathBuf) -> Result<()> {
+fn start(autostart_file_path: PathBuf) -> Result<()> {
+    // Initialize the XCB connection
     let (conn, screen_num) = xcb::Connection::connect(None)?;
     // Initialize the client channel
     let (client_sender, client_receiver) = channel::unbounded();
+
+    let config = config::Config::new(autostart_file_path);
 
     // Spawn the IPC thread
     thread::spawn(move || {
         client::handle_ipc(client_sender);
     });
     // Start the window manager
-    let mut wm = WindowManager::new(conn, screen_num, client_receiver);
-    wm.run(autostart)
+    let mut wm = WindowManager::new(conn, screen_num, client_receiver, config);
+    wm.run()
 }

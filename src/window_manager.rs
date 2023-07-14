@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use crossbeam::channel;
-use std::path::PathBuf;
 use std::process;
 use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
 use crate::atoms::Atoms;
 use crate::commands::{Command, WorkspaceSelector};
+use crate::config::Config;
 use crate::state::State;
 use crate::vector::Vector2D;
 use crate::{ewmh, icccm};
@@ -17,6 +17,7 @@ pub struct WindowManager {
     atoms: Atoms,
     client_receiver: channel::Receiver<Command>,
     screen_num: i32,
+    config: Config,
 }
 
 impl WindowManager {
@@ -24,19 +25,22 @@ impl WindowManager {
         conn: xcb::Connection,
         screen_num: i32,
         client_receiver: channel::Receiver<Command>,
+        config: Config,
     ) -> WindowManager {
         let conn = Arc::new(conn);
         let atoms = Atoms::intern_all(&conn).unwrap();
+
         WindowManager {
             state: State::default(),
             conn,
             atoms,
             client_receiver,
             screen_num,
+            config,
         }
     }
 
-    pub fn run(&mut self, autostart: PathBuf) -> Result<()> {
+    pub fn run(&mut self) -> Result<()> {
         let conn = Arc::clone(&self.conn);
         let setup = conn.get_setup();
         // TODO handle no screen?
@@ -71,7 +75,7 @@ impl WindowManager {
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
 
-        process::Command::new(autostart)
+        process::Command::new(&self.config.autostart_file_path)
             .spawn()
             .with_context(|| "Failed to load toniorc")?;
 

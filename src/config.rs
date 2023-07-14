@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use xcb::x;
 
 pub static MOD_KEY: x::ModMask = x::ModMask::N4; // Mod
@@ -15,3 +17,15 @@ pub static BORDER_WIDTH: usize = 2;
 
 pub static BORDER_COLOR: u32 = 0xcccccc;
 pub static BORDER_COLOR_FOCUS: u32 = 0x00ccff;
+
+pub struct Config {
+    pub autostart_file_path: PathBuf,
+}
+
+impl Config {
+    pub fn new(autostart_file_path: PathBuf) -> Self {
+        Self {
+            autostart_file_path,
+        }
+    }
+}

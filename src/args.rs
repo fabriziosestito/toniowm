@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -27,7 +29,11 @@ pub struct Args {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Start the window manager
-    Start,
+    Start{
+        ///Sets the path of the rc file
+        #[clap(short, long, default_value = "~/.config/toniowm/toniorc")]
+        autostart: PathBuf
+    },
     /// Send a command to the window manager
     #[command(subcommand)]
     Client(Command),

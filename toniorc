@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+
+#=========================================================
+#
+#     _____                _         _    _ ___  ___
+#    |_   _|              (_)       | |  | ||  \/  |
+#      | |    ___   _ __   _   ___  | |  | || .  . |
+#      | |   / _ \ | '_ \ | | / _ \ | |/\| || |\/| |
+#      | |  | (_) || | | || || (_) |\  /\  /| |  | |
+#      \_/   \___/ |_| |_||_| \___/  \/  \/ \_|  |_/
+#                                               
+#
+#=========================================================
+
+cargo run client rename-workspace "first" --index 0
+cargo run client add-workspace --name "second"
+cargo run client add-workspace --name "third"
+cargo run client add-workspace --name "fourth"
+cargo run client add-workspace --name "fifth"

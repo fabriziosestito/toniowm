@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use crossbeam::channel;
+use std::path::PathBuf;
 use std::process;
 use std::{sync::Arc, thread};
 use xcb::{x, Xid};
@@ -35,7 +36,7 @@ impl WindowManager {
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self, autostart: PathBuf) -> Result<()> {
         let conn = Arc::clone(&self.conn);
         let setup = conn.get_setup();
         // TODO handle no screen?
@@ -69,10 +70,12 @@ impl WindowManager {
         ewmh::set_supporting_wm_check(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
-        process::Command::new("./toniorc")
+
+        process::Command::new(autostart)
             .spawn()
             .with_context(|| "Failed to load toniorc")?;
-        self.refresh_desktops_hints();
+
+        self.refresh_workspaces();
 
         conn.flush()?;
 
@@ -148,11 +151,11 @@ impl WindowManager {
                     }
                     Command::AddWorkspace{ name } => {
                         self.state.add_workspace(name)?;
-                        self.refresh_desktops_hints();
+                        self.refresh_workspaces();
                     }
                     Command::RenameWorkspace{ selector, name } => {
                         self.state.rename_workspace(selector, name)?;
-                        self.refresh_desktops_hints();
+                        self.refresh_workspaces();
                     }
                     Command::SelectWorkspace{ selector } => {
                         self.activate_workspace(selector)?;
@@ -452,7 +455,7 @@ impl WindowManager {
         Ok(())
     }
 
-    fn refresh_desktops_hints(&self) {
+    fn refresh_workspaces(&self) {
         ewmh::set_number_of_desktops(
             &self.conn,
             &self.atoms,

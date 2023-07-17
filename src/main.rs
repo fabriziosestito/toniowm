@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use crossbeam::channel;
+use expanduser::expanduser;
 use std::{path::PathBuf, thread};
 use window_manager::WindowManager;
 
@@ -20,7 +21,7 @@ fn main() -> Result<()> {
     match cli.command {
         Some(args::Commands::Start {
             autostart: autostart_file_path,
-        }) => start(autostart_file_path),
+        }) => start(expanduser(autostart_file_path)?),
         Some(args::Commands::Client(command)) => {
             client::dispatch_command(command.into());
 

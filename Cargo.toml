@@ -12,3 +12,4 @@ xcb = { version = "1.2.1" }
 crossbeam = { version = "0.8.2" }
 serde_json = "1.0"
 indexmap = "1.9"
+expanduser = "1.2.2"

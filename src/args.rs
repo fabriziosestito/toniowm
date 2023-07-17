@@ -32,7 +32,7 @@ pub enum Commands {
     Start{
         ///Sets the path of the rc file
         #[clap(short, long, default_value = "~/.config/toniowm/toniorc")]
-        autostart: PathBuf
+        autostart: String,
     },
     /// Send a command to the window manager
     #[command(subcommand)]

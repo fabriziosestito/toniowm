@@ -36,7 +36,7 @@ fn start(autostart_file_path: PathBuf) -> Result<()> {
     // Initialize the client channel
     let (client_sender, client_receiver) = channel::unbounded();
 
-    let config = config::Config::new(autostart_file_path);
+    let config = config::Config::default();
 
     // Spawn the IPC thread
     thread::spawn(move || {
@@ -44,5 +44,5 @@ fn start(autostart_file_path: PathBuf) -> Result<()> {
     });
     // Start the window manager
     let mut wm = WindowManager::new(conn, screen_num, client_receiver, config);
-    wm.run()
+    wm.run(autostart_file_path)
 }

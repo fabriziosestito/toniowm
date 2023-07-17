@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use crossbeam::channel;
+use std::path::PathBuf;
 use std::process;
 use std::{sync::Arc, thread};
 use xcb::{x, Xid};
@@ -40,7 +41,7 @@ impl WindowManager {
         }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self, autostart_file_path: PathBuf) -> Result<()> {
         let conn = Arc::clone(&self.conn);
         let setup = conn.get_setup();
         // TODO handle no screen?
@@ -75,7 +76,7 @@ impl WindowManager {
         ewmh::set_active_window(&conn, &self.atoms, self.state.root, self.state.child);
         ewmh::set_current_desktop(&conn, &self.atoms, self.state.root, 0);
 
-        process::Command::new(&self.config.autostart_file_path)
+        process::Command::new(&autostart_file_path)
             .spawn()
             .with_context(|| "Failed to load toniorc")?;
 
@@ -229,7 +230,7 @@ impl WindowManager {
         self.conn.send_request(&x::ChangeWindowAttributes {
             window: ev.window(),
             value_list: &[
-                x::Cw::BorderPixel(123),
+                x::Cw::BorderPixel(self.config.border_color),
                 x::Cw::EventMask(
                     x::EventMask::SUBSTRUCTURE_NOTIFY | x::EventMask::SUBSTRUCTURE_REDIRECT,
                 ),
@@ -365,7 +366,7 @@ impl WindowManager {
                     x::ConfigWindow::Y(ev.y() as i32),
                     x::ConfigWindow::Width(ev.width() as u32),
                     x::ConfigWindow::Height(ev.height() as u32),
-                    x::ConfigWindow::BorderWidth(crate::config::BORDER_WIDTH as u32),
+                    x::ConfigWindow::BorderWidth(self.config.border_width),
                     x::ConfigWindow::StackMode(ev.stack_mode()),
                 ],
             });
@@ -385,7 +386,7 @@ impl WindowManager {
         if let Some(last_focused) = self.state.last_focused() {
             self.conn.send_request(&x::ChangeWindowAttributes {
                 window: last_focused,
-                value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR)],
+                value_list: &[x::Cw::BorderPixel(self.config.border_color)],
             });
         }
 
@@ -399,7 +400,7 @@ impl WindowManager {
         // Select and focus
         self.conn.send_request(&x::ChangeWindowAttributes {
             window,
-            value_list: &[x::Cw::BorderPixel(crate::config::BORDER_COLOR_FOCUS)],
+            value_list: &[x::Cw::BorderPixel(self.config.border_color_focus)],
         });
 
         self.conn.send_request(&x::SetInputFocus {

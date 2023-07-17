@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use xcb::x;
 
 pub static MOD_KEY: x::ModMask = x::ModMask::N4; // Mod
@@ -13,19 +11,18 @@ pub static SELECT_BUTTON: x::ButtonIndex = x::ButtonIndex::N1; // Left Mouse But
 pub static RESIZE_BUTTON: x::ButtonIndex = x::ButtonIndex::N3; // Right Mouse Button
 pub static RESIZE_BUTTON_MASK: x::KeyButMask = x::KeyButMask::BUTTON3;
 
-pub static BORDER_WIDTH: usize = 2;
-
-pub static BORDER_COLOR: u32 = 0xcccccc;
-pub static BORDER_COLOR_FOCUS: u32 = 0x00ccff;
-
 pub struct Config {
-    pub autostart_file_path: PathBuf,
+    pub border_width: u32,
+    pub border_color: u32,
+    pub border_color_focus: u32,
 }
 
-impl Config {
-    pub fn new(autostart_file_path: PathBuf) -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
-            autostart_file_path,
+            border_width: 0,
+            border_color: 0xcccccc,
+            border_color_focus: 0x00ccff,
         }
     }
 }

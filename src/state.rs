@@ -282,7 +282,7 @@ impl State {
         let mut min_distance = std::i32::MAX;
         let mut closest_client = None;
 
-        for (_, c) in self.active_workspace_clients().clone() {
+        for (_, c) in self.active_workspace_clients() {
             if c.window == client.window {
                 continue; // Skip the focused window
             }
@@ -296,25 +296,25 @@ impl State {
                 Direction::East => {
                     if c.pos.x > client.pos.x && distance < min_distance {
                         min_distance = distance;
-                        closest_client = Some(c);
+                        closest_client = Some(c.window);
                     }
                 }
                 Direction::West => {
                     if c.pos.x < client.pos.x && distance < min_distance {
                         min_distance = distance;
-                        closest_client = Some(c);
+                        closest_client = Some(c.window);
                     }
                 }
                 Direction::North => {
                     if c.pos.y < client.pos.y && distance < min_distance {
                         min_distance = distance;
-                        closest_client = Some(c);
+                        closest_client = Some(c.window);
                     }
                 }
                 Direction::South => {
                     if c.pos.y > client.pos.y && distance < min_distance {
                         min_distance = distance;
-                        closest_client = Some(c);
+                        closest_client = Some(c.window);
                     }
                 }
             }
@@ -323,8 +323,8 @@ impl State {
         match closest_client {
             None => Ok(None),
             Some(closest_client) => {
-                self.set_focused(Some(closest_client.window));
-                Ok(Some(closest_client.window))
+                self.set_focused(Some(closest_client));
+                Ok(Some(closest_client))
             }
         }
     }

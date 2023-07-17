@@ -119,7 +119,7 @@ impl State {
     ) -> Result<(), Error> {
         let (old_name, _) = match selector {
             WorkspaceSelector::Index(index) => {
-                if let Some((old_name, workspace)) = self.workspaces.get_index_mut(index) {
+                if let Some((old_name, workspace)) = self.workspaces.get_index_mut2(index) {
                     (old_name, workspace)
                 } else {
                     return Err(Error::WorkspaceNotFound);

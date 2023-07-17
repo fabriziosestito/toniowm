@@ -132,9 +132,9 @@ impl WindowManager {
                     }
                     Command::FocusClosest{ selector, direction} => {
                         match self.state.focus_closest_client(selector, direction) {
-                            Ok(client) => {
-                                if let Some(client) = client {
-                                    self.focus_window(client.window())?;
+                            Ok(window) => {
+                                if let Some(window) = window {
+                                    self.focus_window(window)?;
                                 };
                             }
                             Err(e) => {
@@ -333,22 +333,19 @@ impl WindowManager {
         }
 
         if ev.state().contains(crate::config::DRAG_BUTTON_MASK) {
-            let client = self.state.drag_client(ev.event(), mouse_pos)?;
+            let new_pos = self.state.drag_client(ev.event(), mouse_pos)?;
 
             self.conn.send_request(&x::ConfigureWindow {
                 window: ev.event(),
-                value_list: &[
-                    x::ConfigWindow::X(client.pos().x),
-                    x::ConfigWindow::Y(client.pos().y),
-                ],
+                value_list: &[x::ConfigWindow::X(new_pos.x), x::ConfigWindow::Y(new_pos.y)],
             });
         } else if ev.state().contains(crate::config::RESIZE_BUTTON_MASK) {
-            let client = self.state.drag_resize_client(ev.event(), mouse_pos)?;
+            let new_size = self.state.drag_resize_client(ev.event(), mouse_pos)?;
             self.conn.send_request(&x::ConfigureWindow {
                 window: ev.event(),
                 value_list: &[
-                    x::ConfigWindow::Width(client.size().x as u32),
-                    x::ConfigWindow::Height(client.size().y as u32),
+                    x::ConfigWindow::Width(new_size.x as u32),
+                    x::ConfigWindow::Height(new_size.y as u32),
                 ],
             });
         }
@@ -464,14 +461,14 @@ impl WindowManager {
             &self.conn,
             &self.atoms,
             self.state.root,
-            self.state.workspaces().len() as u32,
+            self.state.workspaces_names().len() as u32,
         );
 
         ewmh::set_desktop_names(
             &self.conn,
             &self.atoms,
             self.state.root,
-            self.state.workspaces().iter().map(|w| w.name()).collect(),
+            self.state.workspaces_names(),
         );
     }
 }

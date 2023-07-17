@@ -21,21 +21,13 @@ pub enum Error {
     WorkspaceNotFound,
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Workspace {
-    /// The name of the workspace
-    name: String,
     /// The list of clients managed by the workspace
     clients: IndexMap<x::Window, Client>,
 }
 
-impl Workspace {
-    pub fn name(&self) -> String {
-        self.name.to_owned()
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 /// A client is everything we know by a window
 pub struct Client {
     /// The window id
@@ -49,14 +41,6 @@ pub struct Client {
 impl Client {
     pub fn window(&self) -> x::Window {
         self.window
-    }
-
-    pub fn pos(&self) -> Vector2D {
-        self.pos
-    }
-
-    pub fn size(&self) -> Vector2D {
-        self.size
     }
 }
 
@@ -103,34 +87,37 @@ impl Default for State {
 impl State {
     /// Add a workspace to the state.
     ///
-    /// If no name is provided, the workspace will be named after the index.
+    /// If no name is provided, the workspace will be named after the index + 1.
     /// The name of the workspace must be unique.
-    pub fn add_workspace(&mut self, name: Option<String>) -> Result<Workspace, Error> {
+    pub fn add_workspace(&mut self, name: Option<String>) -> Result<(), Error> {
         let name = if let Some(name) = name {
             name
         } else {
-            self.workspaces.len().to_string()
+            (self.workspaces.len() + 1).to_string()
         };
 
         if self.workspaces.contains_key(&name) {
             Err(Error::WorkspaceAlreadyExists)
         } else {
             let workspace = Workspace {
-                name: name.clone(),
                 clients: IndexMap::new(),
             };
 
-            self.workspaces.insert(name, workspace.clone());
-            Ok(workspace)
+            self.workspaces.insert(name, workspace);
+            Ok(())
         }
     }
-
+    /// Rename a workspace.
+    ///
+    /// Accepts a selector.
+    /// Return an error if no matching workspace is not found.
+    /// Return an error if the new name is already taken.
     pub fn rename_workspace(
         &mut self,
         selector: WorkspaceSelector,
         name: String,
     ) -> Result<(), Error> {
-        let (old_name, workspace) = match selector {
+        let (old_name, _) = match selector {
             WorkspaceSelector::Index(index) => {
                 if let Some((old_name, workspace)) = self.workspaces.get_index_mut(index) {
                     (old_name, workspace)
@@ -147,8 +134,7 @@ impl State {
             }
         };
 
-        *old_name = name.clone();
-        workspace.name = name;
+        *old_name = name;
 
         Ok(())
     }
@@ -171,9 +157,9 @@ impl State {
         }
     }
 
-    /// Return a list of the workspaces
-    pub fn workspaces(&self) -> Vec<Workspace> {
-        self.workspaces.values().cloned().collect()
+    /// Return a list of the workspaces names.
+    pub fn workspaces_names(&self) -> Vec<String> {
+        self.workspaces.keys().cloned().collect()
     }
 
     /// Add a client to the state.
@@ -184,14 +170,14 @@ impl State {
         window: x::Window,
         pos: Vector2D,
         size: Vector2D,
-    ) -> Result<Client, Error> {
+    ) -> Result<(), Error> {
         if self.active_workspace_clients().contains_key(&window) {
             Err(Error::ClientAlreadyExists)
         } else {
             let client = Client { window, pos, size };
             self.active_workspace_clients_mut().insert(window, client);
 
-            Ok(client)
+            Ok(())
         }
     }
 
@@ -213,31 +199,37 @@ impl State {
         }
     }
 
-    /// Drag a client.
+    /// Drag a client and return its new position.
     ///
     /// Return an error if the client is not found.
-    pub fn drag_client(&mut self, window: x::Window, mouse_pos: Vector2D) -> Result<Client, Error> {
+    pub fn drag_client(
+        &mut self,
+        window: x::Window,
+        mouse_pos: Vector2D,
+    ) -> Result<Vector2D, Error> {
         let new_pos = self.drag_start_frame_pos + mouse_pos - self.drag_start_pos;
         if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
             client.pos = new_pos;
-            Ok(client.to_owned())
+
+            Ok(new_pos)
         } else {
             Err(Error::ClientNotFound)
         }
     }
 
-    /// Resize a client by dragging it.
+    /// Resize a client by dragging it and return its new size.
     ///
     /// Return an error if the client is not found.
     pub fn drag_resize_client(
         &mut self,
         window: x::Window,
         mouse_pos: Vector2D,
-    ) -> Result<Client, Error> {
+    ) -> Result<Vector2D, Error> {
         if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
-            client.size = (mouse_pos - client.pos).max(MIN_CLIENT_SIZE);
+            let new_size = (mouse_pos - client.pos).max(MIN_CLIENT_SIZE);
+            client.size = new_size;
 
-            Ok(client.to_owned())
+            Ok(new_size)
         } else {
             Err(Error::ClientNotFound)
         }
@@ -246,11 +238,11 @@ impl State {
     /// Teleport a client to a new position.
     ///
     /// Return an error if the client is not found.
-    pub fn teleport_client(&mut self, window: x::Window, pos: Vector2D) -> Result<Client, Error> {
+    pub fn teleport_client(&mut self, window: x::Window, pos: Vector2D) -> Result<(), Error> {
         if let Some(client) = self.active_workspace_clients_mut().get_mut(&window) {
             client.pos = pos;
 
-            Ok(client.to_owned())
+            Ok(())
         } else {
             Err(Error::ClientNotFound)
         }
@@ -274,7 +266,8 @@ impl State {
         }
     }
 
-    /// Focus the closest client in the given direction or none if there is no client.
+    /// Focus the closest client in the given direction and return its id
+    /// or None if no client in the given direction exists.
     ///
     /// Accepts a Selector.
     /// Return an error if no client can be selected.
@@ -282,7 +275,7 @@ impl State {
         &mut self,
         selector: WindowSelector,
         direction: Direction,
-    ) -> Result<Option<Client>, Error> {
+    ) -> Result<Option<x::Window>, Error> {
         let client = self.select_client(selector)?;
 
         let mut distance: i32;
@@ -331,7 +324,7 @@ impl State {
             None => Ok(None),
             Some(closest_client) => {
                 self.set_focused(Some(closest_client.window));
-                Ok(Some(closest_client.to_owned()))
+                Ok(Some(closest_client.window))
             }
         }
     }
@@ -358,7 +351,7 @@ impl State {
     /// Select a client using a selector.
     ///
     /// Return an error if no matching client has been found.
-    pub fn select_client(&self, selector: WindowSelector) -> Result<Client, Error> {
+    pub fn select_client(&self, selector: WindowSelector) -> Result<&Client, Error> {
         let window = match selector {
             WindowSelector::Focused => {
                 if let Some(window) = self.focused {
@@ -370,7 +363,7 @@ impl State {
             WindowSelector::Window(window) => unsafe { x::Window::new(window) },
         };
 
-        match self.active_workspace_clients().get(&window).cloned() {
+        match self.active_workspace_clients().get(&window) {
             Some(client) => Ok(client),
             None => Err(Error::ClientNotFound),
         }
@@ -424,16 +417,14 @@ mod tests {
     }
 
     #[test]
-    fn workspaces() {
+    fn workspaces_names() {
         let mut state = State::default();
-        let workspace_2 = state.add_workspace(Some("2".to_owned())).unwrap();
-        let workspace_3 = state.add_workspace(Some("3".to_owned())).unwrap();
+        state.add_workspace(Some("2".to_owned())).unwrap();
+        state.add_workspace(Some("3".to_owned())).unwrap();
 
-        let workspaces = state.workspaces();
+        let workspaces_names = state.workspaces_names();
 
-        assert_eq!(workspaces.len(), 3);
-        assert_eq!(workspaces[1], workspace_2);
-        assert_eq!(workspaces[2], workspace_3);
+        assert_eq!(workspaces_names, vec!["1", "2", "3"]);
     }
 
     #[test]
@@ -465,15 +456,13 @@ mod tests {
         let pos = Vector2D::new(0, 0);
         let size = Vector2D::new(100, 100);
 
-        let client = state.add_client(window, pos, size).unwrap();
+        state.add_client(window, pos, size).unwrap();
 
-        assert_eq!(client.window, window);
-        assert_eq!(client.pos, pos);
-        assert_eq!(client.size, size);
+        let expected_client = Client { window, pos, size };
 
         assert_eq!(
-            &indexmap::indexmap! {window => client},
-            state.active_workspace_clients()
+            &expected_client,
+            state.active_workspace_clients().get(&window).unwrap(),
         );
     }
 
@@ -528,17 +517,13 @@ mod tests {
         state.add_client(window, pos, size).unwrap();
 
         let new_pos = Vector2D::new(10, 10);
-        let client = state.drag_client(window, new_pos).unwrap();
+        let pos = state.drag_client(window, new_pos).unwrap();
 
         assert_eq!(
-            state
-                .active_workspace_clients()
-                .get(&window)
-                .unwrap()
-                .clone(),
-            client
+            new_pos,
+            state.active_workspace_clients().get(&window).unwrap().pos
         );
-        assert_eq!(client.pos, new_pos);
+        assert_eq!(new_pos, pos);
     }
 
     #[test]
@@ -561,17 +546,13 @@ mod tests {
         state.add_client(window, pos, size).unwrap();
 
         let new_size = Vector2D::new(50, 50);
-        let client = state.drag_resize_client(window, new_size).unwrap();
+        let size = state.drag_resize_client(window, new_size).unwrap();
 
         assert_eq!(
-            state
-                .active_workspace_clients()
-                .get(&window)
-                .unwrap()
-                .clone(),
-            client
+            new_size,
+            state.active_workspace_clients().get(&window).unwrap().size
         );
-        assert_eq!(client.size, new_size);
+        assert_eq!(new_size, size);
     }
 
     #[test]
@@ -583,11 +564,11 @@ mod tests {
 
         state.add_client(window, pos, size).unwrap();
 
-        let client = state
+        let size = state
             .drag_resize_client(window, Vector2D::new(0, 0))
             .unwrap();
 
-        assert_eq!(client.size(), MIN_CLIENT_SIZE);
+        assert_eq!(size, MIN_CLIENT_SIZE);
     }
 
     #[test]
@@ -610,17 +591,12 @@ mod tests {
         state.add_client(window, pos, size).unwrap();
 
         let new_pos = Vector2D::new(10, 10);
-        let client = state.teleport_client(window, new_pos).unwrap();
+        state.teleport_client(window, new_pos).unwrap();
 
         assert_eq!(
-            state
-                .active_workspace_clients()
-                .get(&window)
-                .unwrap()
-                .clone(),
-            client
+            new_pos,
+            state.active_workspace_clients().get(&window).unwrap().pos
         );
-        assert_eq!(client.pos, new_pos);
     }
 
     #[test]
@@ -673,55 +649,55 @@ mod tests {
         let window_se = unsafe { x::Window::new(3) };
         let window_sw = unsafe { x::Window::new(4) };
 
-        let client_ne = state
+        state
             .add_client(window_ne, Vector2D::new(0, 0), Vector2D::new(100, 100))
             .unwrap();
 
-        let client_nw = state
+        state
             .add_client(window_nw, Vector2D::new(150, 0), Vector2D::new(100, 100))
             .unwrap();
 
-        let client_se = state
+        state
             .add_client(window_se, Vector2D::new(0, 150), Vector2D::new(100, 100))
             .unwrap();
 
-        let client_sw = state
+        state
             .add_client(window_sw, Vector2D::new(150, 150), Vector2D::new(100, 100))
             .unwrap();
 
-        let client = state
+        let focused = state
             .focus_closest_client(
                 WindowSelector::Window(window_ne.resource_id()),
                 Direction::East,
             )
             .unwrap();
 
-        assert_eq!(Some(client_nw), client);
-        assert_eq!(state.focused, Some(client_nw.window));
+        assert_eq!(Some(window_nw), focused);
+        assert_eq!(Some(window_nw), state.focused);
 
-        let client = state
+        let focused = state
             .focus_closest_client(WindowSelector::Focused, Direction::South)
             .unwrap();
 
-        assert_eq!(Some(client_sw), client);
-        assert_eq!(state.focused, Some(client_sw.window));
+        assert_eq!(Some(window_sw), focused);
+        assert_eq!(Some(window_sw), state.focused);
 
-        let client = state
+        let focused = state
             .focus_closest_client(
                 WindowSelector::Window(window_sw.resource_id()),
                 Direction::West,
             )
             .unwrap();
 
-        assert_eq!(Some(client_se), client);
-        assert_eq!(state.focused, Some(client_se.window));
+        assert_eq!(Some(window_se), focused);
+        assert_eq!(Some(window_se), state.focused);
 
-        let client = state
+        let focused = state
             .focus_closest_client(WindowSelector::Focused, Direction::North)
             .unwrap();
 
-        assert_eq!(Some(client_ne), client);
-        assert_eq!(state.focused, Some(client_ne.window));
+        assert_eq!(Some(window_ne), focused);
+        assert_eq!(Some(window_ne), state.focused);
     }
 
     #[test]
@@ -763,17 +739,17 @@ mod tests {
         let pos = Vector2D::new(0, 0);
         let size = Vector2D::new(100, 100);
 
-        let expected_client = state.add_client(window, pos, size).unwrap();
+        state.add_client(window, pos, size).unwrap();
 
         let client = state
             .select_client(WindowSelector::Window(window.resource_id()))
             .unwrap();
-        assert_eq!(client, expected_client);
+        assert_eq!(window, client.window);
 
         state.focus_client(window).unwrap();
 
         let client = state.select_client(WindowSelector::Focused).unwrap();
-        assert_eq!(client, expected_client);
+        assert_eq!(window, client.window);
     }
 
     #[test]

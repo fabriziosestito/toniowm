@@ -24,6 +24,7 @@ pub struct Args {
     pub command: Option<Commands>,
 }
 
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Start the window manager
@@ -64,6 +65,8 @@ pub enum Command {
         #[clap(flatten)]
         selector: WorkspaceSelector,
     },
+    #[command(subcommand)]
+    Config(Config),
 }
 
 #[derive(ValueEnum, Clone)]
@@ -93,3 +96,25 @@ pub struct WorkspaceSelector {
     #[clap(long, short)]
     pub name: Option<String>,
 }
+
+#[derive(Subcommand)]
+pub enum Config {
+    #[clap(about = "Set the border width")]
+    BorderWidth{
+        #[clap(value_name = "BORDER_WIDTH")]
+        width: u32,
+    },
+    #[clap(about = "Set the border color")]
+    BorderColor{
+        #[clap(value_name = "BORDER_COLOR")]
+        color: u32,
+    },
+    #[clap(about = "Set the focused border color")]
+    FocusedBorderColor{
+        #[clap(value_name = "FOCUSED_BORDER_COLOR")]
+        color: u32
+    },
+}
+
+
+

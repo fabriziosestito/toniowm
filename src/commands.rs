@@ -26,6 +26,15 @@ pub enum Command {
     SelectWorkspace {
         selector: WorkspaceSelector,
     },
+    SetBorderWidth {
+        width: u32,
+    },
+    SetBorderColor {
+        color: u32,
+    },
+    SetFocusedBorderColor {
+        color: u32,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,6 +82,15 @@ impl From<args::Command> for Command {
             args::Command::SelectWorkspace { selector } => Self::SelectWorkspace {
                 selector: selector.into(),
             },
+            args::Command::Config(args::Config::BorderWidth { width }) => {
+                Self::SetBorderWidth { width }
+            }
+            args::Command::Config(args::Config::BorderColor { color }) => {
+                Self::SetBorderColor { color }
+            }
+            args::Command::Config(args::Config::FocusedBorderColor { color }) => {
+                Self::SetFocusedBorderColor { color }
+            }
         }
     }
 }

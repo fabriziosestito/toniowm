@@ -376,6 +376,11 @@ impl State {
         self.focused = window;
     }
 
+    /// Get the focused window.
+    pub fn focused(&self) -> Option<x::Window> {
+        self.focused
+    }
+
     /// Get the last focused window.
     pub fn last_focused(&self) -> Option<x::Window> {
         self.last_focused

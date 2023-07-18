@@ -223,7 +223,7 @@ impl WindowManager {
         // Set border width
         self.conn.send_request(&x::ConfigureWindow {
             window: ev.window(),
-            value_list: &[x::ConfigWindow::BorderWidth(10)],
+            value_list: &[x::ConfigWindow::BorderWidth(self.config.border_width)],
         });
 
         // Set border color

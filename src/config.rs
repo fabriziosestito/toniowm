@@ -20,7 +20,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            border_width: 0,
+            border_width: 1,
             border_color: 0xcccccc,
             border_color_focus: 0x00ccff,
         }

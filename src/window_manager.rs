@@ -90,6 +90,7 @@ impl WindowManager {
         thread::spawn(move || loop {
             // TODO: handle error, maybe just log?
             let event = conn.wait_for_event().unwrap();
+            println!("Received event: {:?}", event);
             match event {
                 xcb::Event::X(event) => sender.send(event).unwrap(),
                 xcb::Event::Unknown(_) => {}
@@ -164,6 +165,18 @@ impl WindowManager {
                     }
                     Command::SelectWorkspace{ selector } => {
                         self.activate_workspace(selector)?;
+                    }
+                    Command::SetBorderWidth{ width } => {
+                        self.config.border_width = width;
+                        self.redraw_borders()?;
+                    }
+                    Command::SetBorderColor{ color } => {
+                        self.config.border_color = color;
+                        self.redraw_borders()?;
+                    }
+                    Command::SetFocusedBorderColor{ color } => {
+                        self.config.focused_border_color = color;
+                        self.redraw_borders()?;
                     }
                 }
             }
@@ -400,7 +413,7 @@ impl WindowManager {
         // Select and focus
         self.conn.send_request(&x::ChangeWindowAttributes {
             window,
-            value_list: &[x::Cw::BorderPixel(self.config.border_color_focus)],
+            value_list: &[x::Cw::BorderPixel(self.config.focused_border_color)],
         });
 
         self.conn.send_request(&x::SetInputFocus {
@@ -452,6 +465,34 @@ impl WindowManager {
         // Map all windows on the new workspace
         for (window, _) in self.state.active_workspace_clients().iter() {
             self.conn.send_request(&x::MapWindow { window: *window });
+        }
+
+        Ok(())
+    }
+
+    fn redraw_borders(&self) -> Result<()> {
+        for (window, _) in self.state.active_workspace_clients().iter() {
+            // Set border width
+            self.conn.send_request(&x::ConfigureWindow {
+                window: *window,
+                value_list: &[x::ConfigWindow::BorderWidth(self.config.border_width)],
+            });
+
+            let mut border_color = self.config.border_color;
+            if Some(*window) == self.state.focused() {
+                border_color = self.config.focused_border_color;
+            }
+
+            // Set border color
+            self.conn.send_request(&x::ChangeWindowAttributes {
+                window: *window,
+                value_list: &[
+                    x::Cw::BorderPixel(border_color),
+                    x::Cw::EventMask(
+                        x::EventMask::SUBSTRUCTURE_NOTIFY | x::EventMask::SUBSTRUCTURE_REDIRECT,
+                    ),
+                ],
+            });
         }
 
         Ok(())

@@ -14,7 +14,7 @@ pub static RESIZE_BUTTON_MASK: x::KeyButMask = x::KeyButMask::BUTTON3;
 pub struct Config {
     pub border_width: u32,
     pub border_color: u32,
-    pub border_color_focus: u32,
+    pub focused_border_color: u32,
 }
 
 impl Default for Config {
@@ -22,7 +22,7 @@ impl Default for Config {
         Self {
             border_width: 1,
             border_color: 0xcccccc,
-            border_color_focus: 0x00ccff,
+            focused_border_color: 0x00ccff,
         }
     }
 }

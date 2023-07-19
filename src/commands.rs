@@ -23,7 +23,7 @@ pub enum Command {
         selector: WorkspaceSelector,
         name: String,
     },
-    SelectWorkspace {
+    ActivateWorkspace {
         selector: WorkspaceSelector,
     },
     SetBorderWidth {
@@ -79,7 +79,7 @@ impl From<args::Command> for Command {
                 selector: selector.into(),
                 name,
             },
-            args::Command::SelectWorkspace { selector } => Self::SelectWorkspace {
+            args::Command::ActivateWorkspace { selector } => Self::ActivateWorkspace {
                 selector: selector.into(),
             },
             args::Command::Config(args::Config::BorderWidth { width }) => {

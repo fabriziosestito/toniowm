@@ -163,7 +163,7 @@ impl WindowManager {
                         self.state.rename_workspace(selector, name)?;
                         self.refresh_workspaces();
                     }
-                    Command::SelectWorkspace{ selector } => {
+                    Command::ActivateWorkspace{ selector } => {
                         self.activate_workspace(selector)?;
                     }
                     Command::SetBorderWidth{ width } => {

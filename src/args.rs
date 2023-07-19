@@ -61,7 +61,7 @@ pub enum Command {
         #[clap( value_name = "NEW_NAME" )]
         new_name: String,
     },
-    SelectWorkspace {
+    ActivateWorkspace {
         #[clap(flatten)]
         selector: WorkspaceSelector,
     },

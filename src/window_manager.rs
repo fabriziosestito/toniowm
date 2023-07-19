@@ -168,15 +168,36 @@ impl WindowManager {
                     }
                     Command::SetBorderWidth{ width } => {
                         self.config.border_width = width;
-                        self.redraw_borders()?;
+                        for (window, _) in self.state.active_workspace_clients().iter() {
+                            self.conn.send_request(&x::ConfigureWindow {
+                                window: *window,
+                                value_list: &[x::ConfigWindow::BorderWidth(self.config.border_width)],
+                            });
+                        }
                     }
                     Command::SetBorderColor{ color } => {
                         self.config.border_color = color;
-                        self.redraw_borders()?;
+                        for (window, _) in self.state.active_workspace_clients().iter() {
+                            if Some(*window) == self.state.focused() {
+                                continue;
+                            }
+
+                            self.conn.send_request(&x::ChangeWindowAttributes {
+                                window: *window,
+                                value_list: &[
+                                    x::Cw::BorderPixel(self.config.border_color),
+                                ],
+                            });
+                        }
                     }
                     Command::SetFocusedBorderColor{ color } => {
                         self.config.focused_border_color = color;
-                        self.redraw_borders()?;
+                        if let Some(window) = self.state.focused() {
+                            self.conn.send_request(&x::ChangeWindowAttributes {
+                                window,
+                                value_list: &[x::Cw::BorderPixel(self.config.focused_border_color)],
+                            });
+                        }
                     }
                 }
             }
@@ -239,7 +260,7 @@ impl WindowManager {
             value_list: &[x::ConfigWindow::BorderWidth(self.config.border_width)],
         });
 
-        // Set border color
+        // Set border color and event mask
         self.conn.send_request(&x::ChangeWindowAttributes {
             window: ev.window(),
             value_list: &[
@@ -465,34 +486,6 @@ impl WindowManager {
         // Map all windows on the new workspace
         for (window, _) in self.state.active_workspace_clients().iter() {
             self.conn.send_request(&x::MapWindow { window: *window });
-        }
-
-        Ok(())
-    }
-
-    fn redraw_borders(&self) -> Result<()> {
-        for (window, _) in self.state.active_workspace_clients().iter() {
-            // Set border width
-            self.conn.send_request(&x::ConfigureWindow {
-                window: *window,
-                value_list: &[x::ConfigWindow::BorderWidth(self.config.border_width)],
-            });
-
-            let mut border_color = self.config.border_color;
-            if Some(*window) == self.state.focused() {
-                border_color = self.config.focused_border_color;
-            }
-
-            // Set border color
-            self.conn.send_request(&x::ChangeWindowAttributes {
-                window: *window,
-                value_list: &[
-                    x::Cw::BorderPixel(border_color),
-                    x::Cw::EventMask(
-                        x::EventMask::SUBSTRUCTURE_NOTIFY | x::EventMask::SUBSTRUCTURE_REDIRECT,
-                    ),
-                ],
-            });
         }
 
         Ok(())

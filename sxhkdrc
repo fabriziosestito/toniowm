@@ -1,9 +1,19 @@
+# make sxhkd reload its configuration files
+super + Escape
+        pkill -USR1 -x sxhkd
+
 # terminal emulator
 super + Return
     wezterm
 
+# close window
 super + shift + q
     cargo run client close
 
+# focus window
 super + {Left,Down,Up,Right}
     cargo run client focus-closest {west,south,north,east}
+
+# activate workspace
+super + {1-5}
+    cargo run client activate-workspace -i {0-4}

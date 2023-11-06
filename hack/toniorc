@@ -18,7 +18,7 @@ cargo run client add-workspace --name "third"
 cargo run client add-workspace --name "fourth"
 cargo run client add-workspace --name "fifth"
 
-sxhkd -c sxhkdrc &
+sxhkd -c ./hack/sxhkdrc &
 wezterm &
-polybar -c /etc/polybar/config.ini &
+polybar -c ./hack/polybar.ini &
 hsetroot -solid "#525252" &

@@ -1,0 +1,2 @@
+exec cargo run start -a ./hack/toniorc
+#exec 2bwm

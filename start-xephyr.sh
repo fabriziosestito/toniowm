@@ -1,6 +1,6 @@
 if cargo build; then
     XEPHYR=$(whereis -b Xephyr | cut -f2 -d' ')
-    xinit ./xinitrc -- \
+    xinit ./hack/xinitrc -- \
         "$XEPHYR" \
             :1 \
             -ac \

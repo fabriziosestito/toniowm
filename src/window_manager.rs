@@ -347,6 +347,9 @@ impl WindowManager {
             modifiers: crate::config::MOD_KEY,
         });
 
+        self.state.focus_client(ev.window())?;
+        self.focus_window(ev.window())?;
+
         Ok(())
     }
 

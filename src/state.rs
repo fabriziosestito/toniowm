@@ -63,6 +63,8 @@ pub struct State {
     /// The start position of the frame when dragging a window
     /// This is used to calculate the new position of the window.
     pub drag_start_frame_pos: Vector2D,
+    /// The size of the monitor.
+    pub monitor_size: Vector2D,
 }
 
 impl Default for State {
@@ -76,6 +78,7 @@ impl Default for State {
             last_focused: Default::default(),
             drag_start_pos: Default::default(),
             drag_start_frame_pos: Default::default(),
+            monitor_size: Default::default(),
         };
 
         state.add_workspace(None).unwrap();

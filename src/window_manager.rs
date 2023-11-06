@@ -30,7 +30,6 @@ impl WindowManager {
     ) -> WindowManager {
         let conn = Arc::new(conn);
         let atoms = Atoms::intern_all(&conn).unwrap();
-
         WindowManager {
             state: State::default(),
             conn,
@@ -47,6 +46,10 @@ impl WindowManager {
         // TODO handle no screen?
         let screen = setup.roots().nth(self.screen_num as usize).unwrap();
         self.state.root = screen.root();
+        self.state.monitor_size = Vector2D::new(
+            screen.width_in_pixels().into(),
+            screen.height_in_pixels().into(),
+        );
 
         if self.become_window_manager().is_err() {
             return Err(anyhow!("Another window manager is running."));
@@ -250,8 +253,12 @@ impl WindowManager {
         let reply = self.conn.wait_for_reply(cookie)?;
 
         // Add the window to the state
-        let pos = Vector2D::new(reply.x().into(), reply.y().into());
         let size = Vector2D::new(reply.width().into(), reply.height().into());
+        // Center the window
+        let pos = Vector2D::new(
+            self.state.monitor_size.x / 2 - size.x / 2,
+            self.state.monitor_size.y / 2 - size.y / 2,
+        );
         self.state.add_client(ev.window(), pos, size)?;
 
         // Set border width
@@ -280,8 +287,8 @@ impl WindowManager {
         self.conn.send_request(&x::ReparentWindow {
             window: ev.window(),
             parent: self.state.root,
-            x: 0,
-            y: 0,
+            x: pos.x as i16,
+            y: pos.y as i16,
         });
 
         // Focus the window

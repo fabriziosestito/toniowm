@@ -1,0 +1,9 @@
+# terminal emulator
+super + Return
+    wezterm
+
+super + shift + q
+    cargo run client close
+
+super + {Left,Down,Up,Right}
+    cargo run client focus-closest {west,south,north,east}

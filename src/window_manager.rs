@@ -6,7 +6,7 @@ use std::{sync::Arc, thread};
 use xcb::{x, Xid};
 
 use crate::atoms::Atoms;
-use crate::commands::{Command, WorkspaceSelector};
+use crate::commands::{Command, WindowSelector, WorkspaceSelector};
 use crate::config::Config;
 use crate::state::State;
 use crate::vector::Vector2D;
@@ -135,8 +135,8 @@ impl WindowManager {
                         println!("Quitting");
                         break;
                     }
-                    Command::FocusClosest{ selector, direction} => {
-                        match self.state.focus_closest_client(selector, direction) {
+                    Command::Focus{ selector } => {
+                        match self.state.focus_client(selector) {
                             Ok(window) => {
                                 if let Some(window) = window {
                                     self.focus_window(window)?;
@@ -347,7 +347,8 @@ impl WindowManager {
             modifiers: crate::config::MOD_KEY,
         });
 
-        self.state.focus_client(ev.window())?;
+        self.state
+            .focus_client(WindowSelector::Window(ev.window().resource_id()))?;
         self.focus_window(ev.window())?;
 
         Ok(())
@@ -364,7 +365,8 @@ impl WindowManager {
         self.state.drag_start_frame_pos = Vector2D::new(resp.x().into(), resp.y().into());
 
         if ev.detail() == x::ButtonIndex::N1 as u8 {
-            self.state.focus_client(ev.event())?;
+            self.state
+                .focus_client(WindowSelector::Window(ev.event().resource_id()))?;
             self.focus_window(ev.event())?;
         }
 

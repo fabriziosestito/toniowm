@@ -9,8 +9,7 @@ use crate::args;
 #[derive(Serialize, Deserialize)]
 pub enum Command {
     Quit,
-    FocusClosest {
-        direction: Direction,
+    Focus {
         selector: WindowSelector,
     },
     Close {
@@ -37,18 +36,46 @@ pub enum Command {
     },
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum Direction {
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CardinalDirection {
     East,
     West,
     North,
     South,
 }
 
+impl From<args::CardinalDirection> for CardinalDirection {
+    fn from(direction: args::CardinalDirection) -> Self {
+        match direction {
+            args::CardinalDirection::East => Self::East,
+            args::CardinalDirection::West => Self::West,
+            args::CardinalDirection::North => Self::North,
+            args::CardinalDirection::South => Self::South,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CycleDirection {
+    Next,
+    Prev,
+}
+
+impl From<args::CycleDirection> for CycleDirection {
+    fn from(direction: args::CycleDirection) -> Self {
+        match direction {
+            args::CycleDirection::Next => Self::Next,
+            args::CycleDirection::Prev => Self::Prev,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WindowSelector {
     Focused,
     Window(u32),
+    Closest(CardinalDirection),
+    Cycle(CycleDirection),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,11 +88,7 @@ impl From<args::Command> for Command {
     fn from(command: args::Command) -> Self {
         match command {
             args::Command::Quit => Self::Quit,
-            args::Command::FocusClosest {
-                direction,
-                selector,
-            } => Self::FocusClosest {
-                direction: direction.into(),
+            args::Command::Focus { selector } => Self::Focus {
                 selector: selector.into(),
             },
             args::Command::Close { selector } => Self::Close {
@@ -95,28 +118,27 @@ impl From<args::Command> for Command {
     }
 }
 
-impl From<args::Direction> for Direction {
-    fn from(direction: args::Direction) -> Self {
-        match direction {
-            args::Direction::East => Self::East,
-            args::Direction::West => Self::West,
-            args::Direction::North => Self::North,
-            args::Direction::South => Self::South,
-        }
-    }
-}
-
 impl From<args::WindowSelector> for WindowSelector {
     fn from(selector: args::WindowSelector) -> Self {
         match selector {
             args::WindowSelector {
                 focused: true,
                 window: None,
+                closest: None,
+                cycle: None,
             } => Self::Focused,
             args::WindowSelector {
                 window: Some(window),
                 ..
             } => Self::Window(window),
+            args::WindowSelector {
+                closest: Some(direction),
+                ..
+            } => Self::Closest(direction.into()),
+            args::WindowSelector {
+                cycle: Some(direction),
+                ..
+            } => Self::Cycle(direction.into()),
             // This is unreachable because the clap parser
             // will always return either a focused or a window.
             _ => unreachable!(),

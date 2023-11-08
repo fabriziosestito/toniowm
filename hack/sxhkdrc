@@ -6,14 +6,19 @@ super + Escape
 super + Return
     wezterm
 
+# program launcher
+super + d
+        rofi -modi drun,run -show drun
+
 # close window
 super + shift + q
     cargo run client close
 
-# focus window
+# focus closest window
 super + {Left,Down,Up,Right}
-    cargo run client focus-closest {west,south,north,east}
+    cargo run client focus --closest {west,south,north,east}
 
 # activate workspace
 super + {1-5}
-    cargo run client activate-workspace -i {0-4}
+    cargo run client activate-workspace --index {0-4}
+

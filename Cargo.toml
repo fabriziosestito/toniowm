@@ -13,3 +13,6 @@ crossbeam = { version = "0.8.2" }
 serde_json = "1.0"
 indexmap = "2.1.0"
 expanduser = "1.2.2"
+
+[dev-dependencies]
+rstest = "0.18.2"

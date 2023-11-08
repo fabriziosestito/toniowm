@@ -42,8 +42,7 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum Command {
     Quit,
-    FocusClosest {
-        direction: Direction,
+    Focus {
         #[clap(flatten)]
         selector: WindowSelector,
     },
@@ -70,11 +69,17 @@ pub enum Command {
 }
 
 #[derive(ValueEnum, Clone)]
-pub enum Direction {
+pub enum CardinalDirection {
     East,
     West,
     North,
     South,
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum CycleDirection {
+    Next,
+    Prev,
 }
 
 #[derive(clap::Args, Clone)]
@@ -85,6 +90,12 @@ pub struct WindowSelector {
 
     #[clap(long, short)]
     pub window: Option<u32>,
+    
+    #[clap(long, short)]
+    pub closest: Option<CardinalDirection>,
+
+    #[clap(long, short)]
+    pub cycle: Option<CycleDirection>,
 }
 
 #[derive(clap::Args, Clone)]

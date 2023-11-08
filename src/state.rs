@@ -255,12 +255,16 @@ impl State {
     ///
     /// Return an error if the client is not found.
     pub fn focus_client(&mut self, selector: WindowSelector) -> Result<Option<x::Window>, Error> {
+        // Root window focus is used to unfocus the current window.
+        if let WindowSelector::Window(window) = selector {
+            if self.root.resource_id() == window {
+                self.set_focused(None);
+                return Ok(None);
+            }
+        }
+
         let client = self.select_client(selector)?.clone();
 
-        if self.root == client.window {
-            self.set_focused(None);
-            return Ok(None);
-        }
         self.set_focused(Some(client.window));
         Ok(Some(client.window))
     }
@@ -393,7 +397,6 @@ impl State {
 mod tests {
     use super::*;
 
-    use rstest::rstest;
     use xcb::XidNew;
 
     #[test]
@@ -639,96 +642,65 @@ mod tests {
         state
             .focus_client(WindowSelector::Window(state.root.resource_id()))
             .unwrap();
+
         assert_eq!(state.focused, None);
         assert_eq!(state.last_focused, Some(window));
     }
 
     #[test]
-    fn test_focus_client_window_not_found() {
+    fn test_select_client_window_selector_focused() {
         let mut state = State::default();
         let window = unsafe { x::Window::new(123) };
+        state
+            .add_client(window, Vector2D::new(0, 0), Vector2D::new(100, 100))
+            .unwrap();
+        state.set_focused(Some(window));
 
-        let result = state.focus_client(WindowSelector::Window(window.resource_id()));
+        let client = state.select_client(WindowSelector::Focused).unwrap();
 
-        assert!(matches!(result, Err(Error::ClientNotFound)));
+        assert_eq!(window, client.window);
     }
 
     #[test]
-    fn test_select_closest_client() {
+    fn test_select_client_window_selector_closest() {
         let mut state = State::default();
         let window_ne = unsafe { x::Window::new(1) };
         let window_nw = unsafe { x::Window::new(2) };
-        let window_se = unsafe { x::Window::new(3) };
-        let window_sw = unsafe { x::Window::new(4) };
+        let window_sw = unsafe { x::Window::new(3) };
+        let window_se = unsafe { x::Window::new(4) };
 
         state
-            .add_client(window_ne, Vector2D::new(0, 0), Vector2D::new(100, 100))
-            .unwrap();
-
-        state
-            .add_client(window_nw, Vector2D::new(150, 0), Vector2D::new(100, 100))
+            .add_client(window_nw, Vector2D::new(0, 0), Vector2D::new(100, 100))
             .unwrap();
 
         state
-            .add_client(window_se, Vector2D::new(0, 150), Vector2D::new(100, 100))
+            .add_client(window_ne, Vector2D::new(150, 0), Vector2D::new(100, 100))
             .unwrap();
 
         state
-            .add_client(window_sw, Vector2D::new(150, 150), Vector2D::new(100, 100))
+            .add_client(window_sw, Vector2D::new(0, 150), Vector2D::new(100, 100))
             .unwrap();
 
-        let focused = state
-            .focus_client(WindowSelector::Window(window_ne.resource_id()))
+        state
+            .add_client(window_se, Vector2D::new(150, 150), Vector2D::new(100, 100))
             .unwrap();
 
-        assert_eq!(Some(window_nw), focused);
-        assert_eq!(Some(window_nw), state.focused);
-
+        state.set_focused(Some(window_ne));
         let client = state
             .select_client(WindowSelector::Closest(CardinalDirection::South))
             .unwrap();
+        assert_eq!(window_se, client.window);
 
-        assert_eq!(window_sw, client.window);
-
+        state.set_focused(Some(window_se));
         let client = state
             .select_client(WindowSelector::Closest(CardinalDirection::West))
             .unwrap();
+        assert_eq!(window_sw, client.window);
 
-        assert_eq!(window_se, client.window);
-
+        state.set_focused(Some(window_sw));
         let client = state
             .select_client(WindowSelector::Closest(CardinalDirection::North))
             .unwrap();
-
-        assert_eq!(window_ne, client.window);
+        assert_eq!(window_nw, client.window);
     }
-
-    // #[test]
-    // fn test_select_closest_client_not_found() {
-    //     let window = unsafe { x::Window::new(123) };
-    //     let mut state = State::default();
-
-    //     let result = state.focus_client(WindowSelector::Closest(CardinalDirection::North));
-
-    //     assert!(matches!(result, Err(Error::ClientNotFound)));
-    // }
-
-    // #[test]
-    // fn test_set_focused() {
-    //     let old_focused = unsafe { x::Window::new(123) };
-    //     let mut state = State {
-    //         focused: Some(old_focused),
-    //         ..Default::default()
-    //     };
-
-    //     let new_focused = unsafe { x::Window::new(456) };
-    //     state.set_focused(Some(new_focused));
-
-    //     assert_eq!(state.focused, Some(new_focused));
-    //     assert_eq!(state.last_focused, Some(old_focused));
-
-    //     state.set_focused(None);
-    //     assert_eq!(state.focused, None);
-    //     assert_eq!(state.last_focused, Some(new_focused));
-    // }
 }

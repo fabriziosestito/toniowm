@@ -6,6 +6,10 @@ super + Escape
 super + Return
     wezterm
 
+# program launcher
+super + d
+        rofi -modi drun,run -show drun
+
 # close window
 super + shift + q
     cargo run client close

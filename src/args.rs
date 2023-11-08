@@ -10,16 +10,6 @@ use clap::{Parser, Subcommand, ValueEnum};
     arg_required_else_help = true,
 )]
 pub struct Args {
-    // /// Optional name to operate on
-    // name: Option<String>,
-
-    // /// Sets a custom config file
-    // #[arg(short, long, value_name = "FILE")]
-    // config: Option<PathBuf>,
-
-    // /// Turn debugging information on
-    // #[arg(short, long, action = clap::ArgAction::Count)]
-    // debug: u8,
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -91,7 +81,7 @@ pub struct WindowSelector {
     #[clap(long, short)]
     pub window: Option<u32>,
     
-    #[clap(long, short)]
+    #[clap(long, short = 'd')]
     pub closest: Option<CardinalDirection>,
 
     #[clap(long, short)]

@@ -135,6 +135,13 @@ impl State {
                     return Err(Error::WorkspaceNotFound);
                 }
             }
+            WorkspaceSelector::Cycle(direction) => {
+                let index = self.select_workspace_cycle(direction);
+
+                self.workspaces
+                    .get_index_mut2(index)
+                    .expect("Unexpected: no workspace")
+            }
         };
 
         *old_name = name;
@@ -150,6 +157,7 @@ impl State {
         let index = match selector {
             WorkspaceSelector::Index(index) => Some(index),
             WorkspaceSelector::Name(name) => self.workspaces.get_index_of(&name),
+            WorkspaceSelector::Cycle(direction) => Some(self.select_workspace_cycle(direction)),
         };
         if let Some(index) = index {
             self.active_workspace = index;
@@ -157,6 +165,15 @@ impl State {
             Ok(index)
         } else {
             Err(Error::WorkspaceNotFound)
+        }
+    }
+
+    fn select_workspace_cycle(&self, direction: CycleDirection) -> usize {
+        match direction {
+            CycleDirection::Next => (self.active_workspace + 1) % self.workspaces.len(),
+            CycleDirection::Prev => {
+                (self.active_workspace + self.workspaces.len() - 1) % self.workspaces.len()
+            }
         }
     }
 
@@ -484,6 +501,19 @@ mod tests {
 
         assert!(matches!(result, Err(Error::WorkspaceNotFound)));
         assert_eq!(0, state.active_workspace);
+    }
+
+    #[test]
+    fn select_workspace_cycle() {
+        let mut state = State::default();
+        state.add_workspace(Some("second".to_owned())).unwrap();
+        state.add_workspace(Some("third".to_owned())).unwrap();
+
+        let index = state.select_workspace_cycle(CycleDirection::Next);
+        assert_eq!(1, index);
+
+        let index = state.select_workspace_cycle(CycleDirection::Prev);
+        assert_eq!(2, index);
     }
 
     #[test]

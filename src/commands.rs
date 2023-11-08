@@ -82,6 +82,7 @@ pub enum WindowSelector {
 pub enum WorkspaceSelector {
     Index(usize),
     Name(String),
+    Cycle(CycleDirection),
 }
 
 impl From<args::Command> for Command {
@@ -152,11 +153,17 @@ impl From<args::WorkspaceSelector> for WorkspaceSelector {
             args::WorkspaceSelector {
                 index: Some(index),
                 name: None,
+                cycle: None,
             } => Self::Index(index),
             args::WorkspaceSelector {
                 name: Some(name),
                 index: None,
+                cycle: None,
             } => Self::Name(name),
+            args::WorkspaceSelector {
+                cycle: Some(direction),
+                ..
+            } => Self::Cycle(direction.into()),
             // This is unreachable because the clap parser
             // will always return either a focused or a window.
             _ => unreachable!(),

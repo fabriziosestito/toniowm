@@ -81,7 +81,7 @@ pub struct WindowSelector {
     #[clap(long, short)]
     pub window: Option<u32>,
     
-    #[clap(long, short = 'd')]
+    #[clap(long, short = 's')]
     pub closest: Option<CardinalDirection>,
 
     #[clap(long, short)]
@@ -96,6 +96,9 @@ pub struct WorkspaceSelector {
 
     #[clap(long, short)]
     pub name: Option<String>,
+
+    #[clap(long, short)]
+    pub cycle: Option<CycleDirection>,
 }
 
 #[derive(Subcommand)]

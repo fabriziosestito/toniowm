@@ -8,7 +8,7 @@ super + Return
 
 # program launcher
 super + d
-        rofi -modi drun,run -show drun
+    rofi -modi drun,run -show drun
 
 # close window
 super + shift + q
@@ -19,11 +19,12 @@ super + {Left,Down,Up,Right}
     cargo run client focus --closest {west,south,north,east}
 
 # focus cycle
-alt + Tab
-    cargo run client focus --cycle next
+super + {o, i} 
+    cargo run client focus --cycle {prev, next}
 
-alt + shift + Tab
-    cargo run client focus --cycle prev
+
+super + {comma,period}
+    cargo run client activate-workspace --cycle {prev,next}
 
 # activate workspace
 super + {1-5}

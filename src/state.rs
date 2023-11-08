@@ -307,18 +307,43 @@ impl State {
                     .get(&x::Window::new(window))
                     .ok_or(Error::ClientNotFound)
             },
-            WindowSelector::Closest(direction) => self.select_closest_client(direction),
-            WindowSelector::Cycle(direction) => match direction {
-                CycleDirection::Next => {
-                    todo!()
-                }
-                CycleDirection::Prev => todo!(),
-            },
+            WindowSelector::Closest(direction) => self.select_client_closest(direction),
+            WindowSelector::Cycle(direction) => self.select_client_cycle(direction),
         }
     }
 
-    /// Return the closest client in the given cardinal direction
-    fn select_closest_client(&self, direction: CardinalDirection) -> Result<&Client, Error> {
+    fn select_client_cycle(&self, direction: CycleDirection) -> Result<&Client, Error> {
+        let window = if let Some(window) = self.focused {
+            window
+        } else {
+            return Err(Error::ClientNotFound);
+        };
+
+        let index = self
+            .active_workspace_clients()
+            .get_index_of(&window)
+            .expect("Focused client not found");
+
+        match direction {
+            CycleDirection::Next => {
+                let index = (index + 1) % self.active_workspace_clients().len();
+                self.active_workspace_clients()
+                    .get_index(index)
+                    .map(|(_, client)| client)
+                    .ok_or(Error::ClientNotFound)
+            }
+            CycleDirection::Prev => {
+                let index = (index + self.active_workspace_clients().len() - 1)
+                    % self.active_workspace_clients().len();
+                self.active_workspace_clients()
+                    .get_index(index)
+                    .map(|(_, client)| client)
+                    .ok_or(Error::ClientNotFound)
+            }
+        }
+    }
+
+    fn select_client_closest(&self, direction: CardinalDirection) -> Result<&Client, Error> {
         let client = if let Some(focused) = self.focused {
             self.active_workspace_clients()
                 .get(&focused)
@@ -702,5 +727,39 @@ mod tests {
             .select_client(WindowSelector::Closest(CardinalDirection::North))
             .unwrap();
         assert_eq!(window_nw, client.window);
+    }
+
+    #[test]
+    fn select_client_window_selector_cycle() {
+        let mut state = State::default();
+        let window_1 = unsafe { x::Window::new(1) };
+        let window_2 = unsafe { x::Window::new(2) };
+        let window_3 = unsafe { x::Window::new(3) };
+
+        state
+            .add_client(window_1, Vector2D::new(0, 0), Vector2D::new(100, 100))
+            .unwrap();
+
+        state
+            .add_client(window_2, Vector2D::new(150, 0), Vector2D::new(100, 100))
+            .unwrap();
+
+        state
+            .add_client(window_3, Vector2D::new(0, 150), Vector2D::new(100, 100))
+            .unwrap();
+
+        state.set_focused(Some(window_1));
+
+        let client = state
+            .select_client(WindowSelector::Cycle(CycleDirection::Next))
+            .unwrap();
+
+        assert_eq!(window_2, client.window);
+
+        let client = state
+            .select_client(WindowSelector::Cycle(CycleDirection::Prev))
+            .unwrap();
+
+        assert_eq!(window_3, client.window);
     }
 }

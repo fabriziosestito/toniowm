@@ -18,6 +18,13 @@ super + shift + q
 super + {Left,Down,Up,Right}
     cargo run client focus --closest {west,south,north,east}
 
+# focus cycle
+alt + Tab
+    cargo run client focus --cycle next
+
+alt + shift + Tab
+    cargo run client focus --cycle prev
+
 # activate workspace
 super + {1-5}
     cargo run client activate-workspace --index {0-4}

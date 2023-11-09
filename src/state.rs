@@ -4,6 +4,7 @@ use xcb::{x, Xid, XidNew};
 
 use crate::{
     commands::{CardinalDirection, CycleDirection, WindowSelector, WorkspaceSelector},
+    layout,
     vector::Vector2D,
 };
 
@@ -33,9 +34,9 @@ pub struct Client {
     /// The window id
     window: x::Window,
     /// The position of the window
-    pos: Vector2D,
+    pub pos: Vector2D,
     /// The size of the window
-    size: Vector2D,
+    pub size: Vector2D,
 }
 
 impl Client {
@@ -175,6 +176,20 @@ impl State {
                 (self.active_workspace + self.workspaces.len() - 1) % self.workspaces.len()
             }
         }
+    }
+
+    pub fn apply_layout(&mut self) {
+        let layout = layout::VerticalSplitLayout {
+            monitor_size: self.monitor_size,
+            top_gap: 80,
+            bottom_gap: 40,
+            left_gap: 40,
+            right_gap: 40,
+            window_gap: 40,
+        };
+
+        let clients = self.active_workspace_clients_mut();
+        layout.apply_layout(clients);
     }
 
     /// Return a list of the workspaces names.

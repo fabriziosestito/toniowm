@@ -12,6 +12,7 @@ mod commands;
 mod config;
 mod ewmh;
 mod icccm;
+mod layout;
 mod state;
 mod vector;
 mod window_manager;

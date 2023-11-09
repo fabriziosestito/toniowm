@@ -1,6 +1,6 @@
 # make sxhkd reload its configuration files
 super + Escape
-        pkill -USR1 -x sxhkd
+    pkill -USR1 -x sxhkd
 
 # terminal emulator
 super + Return
@@ -29,4 +29,8 @@ super + {comma,period}
 # activate workspace
 super + {1-5}
     cargo run client activate-workspace --index {0-4}
+
+
+super + l
+    cargo run client apply-layout
 

@@ -54,6 +54,7 @@ pub enum Command {
         #[clap(flatten)]
         selector: WorkspaceSelector,
     },
+    ApplyLayout,
     #[command(subcommand)]
     Config(Config),
 }

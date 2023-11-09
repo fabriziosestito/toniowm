@@ -169,6 +169,20 @@ impl WindowManager {
                     Command::ActivateWorkspace{ selector } => {
                         self.activate_workspace(selector)?;
                     }
+                    Command::ApplyLayout => {
+                        self.state.apply_layout();
+                        for (window, client) in self.state.active_workspace_clients().iter() {
+                            self.conn.send_request(&x::ConfigureWindow {
+                                window: *window,
+                                value_list: &[
+                                    x::ConfigWindow::X(client.pos.x),
+                                    x::ConfigWindow::Y(client.pos.y),
+                                    x::ConfigWindow::Width(client.size.x as u32),
+                                    x::ConfigWindow::Height(client.size.y as u32),
+                                ],
+                            });
+                        }
+                    }
                     Command::SetBorderWidth{ width } => {
                         self.config.border_width = width;
                         for (window, _) in self.state.active_workspace_clients().iter() {

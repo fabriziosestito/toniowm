@@ -25,6 +25,7 @@ pub enum Command {
     ActivateWorkspace {
         selector: WorkspaceSelector,
     },
+    ApplyLayout,
     SetBorderWidth {
         width: u32,
     },
@@ -106,6 +107,7 @@ impl From<args::Command> for Command {
             args::Command::ActivateWorkspace { selector } => Self::ActivateWorkspace {
                 selector: selector.into(),
             },
+            args::Command::ApplyLayout => Self::ApplyLayout,
             args::Command::Config(args::Config::BorderWidth { width }) => {
                 Self::SetBorderWidth { width }
             }
